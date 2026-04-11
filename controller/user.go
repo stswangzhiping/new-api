@@ -799,36 +799,51 @@ func DeleteSelf(c *gin.Context) {
 	return
 }
 
+// createUserRequest 扩展 User，增加 capabilities 字段（不存 DB）。
+type createUserRequest struct {
+	model.User
+	Capabilities []string `json:"capabilities"`
+}
+
 func CreateUser(c *gin.Context) {
-	var user model.User
-	err := json.NewDecoder(c.Request.Body).Decode(&user)
-	user.Username = strings.TrimSpace(user.Username)
-	if err != nil || user.Username == "" || user.Password == "" {
+	var req createUserRequest
+	err := json.NewDecoder(c.Request.Body).Decode(&req)
+	req.Username = strings.TrimSpace(req.Username)
+	if err != nil || req.Username == "" || req.Password == "" {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
-	if err := common.Validate.Struct(&user); err != nil {
+	if err := common.Validate.Struct(&req.User); err != nil {
 		common.ApiErrorI18n(c, i18n.MsgUserInputInvalid, map[string]any{"Error": err.Error()})
 		return
 	}
-	if user.DisplayName == "" {
-		user.DisplayName = user.Username
+	if req.DisplayName == "" {
+		req.DisplayName = req.Username
 	}
 	myRole := c.GetInt("role")
-	if user.Role >= myRole {
+	if req.Role >= myRole {
 		common.ApiErrorI18n(c, i18n.MsgUserCannotCreateHigherLevel)
 		return
 	}
 	// Even for admin users, we cannot fully trust them!
 	cleanUser := model.User{
-		Username:    user.Username,
-		Password:    user.Password,
-		DisplayName: user.DisplayName,
-		Role:        user.Role, // 保持管理员设置的角色
+		Username:    req.Username,
+		Password:    req.Password,
+		DisplayName: req.DisplayName,
+		Role:        req.Role,
 	}
 	if err := cleanUser.Insert(0); err != nil {
 		common.ApiError(c, err)
 		return
+	}
+
+	// 如果是管理员且提供了 capabilities，写入授权表
+	if cleanUser.Id > 0 && cleanUser.Role == common.RoleAdminUser && len(req.Capabilities) > 0 {
+		grantedBy := c.GetInt("id")
+		if err := model.SetAdminCapabilities(cleanUser.Id, req.Capabilities, grantedBy); err != nil {
+			// capabilities 写入失败不影响用户创建成功，仅记录日志
+			common.SysLog("CreateUser: 写入 capabilities 失败: " + err.Error())
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

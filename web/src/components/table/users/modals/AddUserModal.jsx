@@ -32,16 +32,29 @@ import {
   Form,
   Row,
   Col,
+  RadioGroup,
+  Radio,
 } from '@douyinfe/semi-ui';
 import { IconSave, IconClose, IconUserAdd } from '@douyinfe/semi-icons';
 import { useTranslation } from 'react-i18next';
 
 const { Text, Title } = Typography;
 
+const ROLE_COMMON = 1;
+const ROLE_ADMIN = 10;
+
+// capability 三选一：单选，写入 admin_capabilities 表
+const CAPABILITY_OPTIONS = [
+  { value: 'operator', label: '运营 (Operator)' },
+  { value: 'finance',  label: '财务 (Finance)' },
+  { value: 'admin',    label: '管理员 (Admin) — 全功能' },
+];
+
 const AddUserModal = (props) => {
   const { t } = useTranslation();
   const formApiRef = useRef(null);
   const [loading, setLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState(ROLE_COMMON);
   const isMobile = useIsMobile();
 
   const getInitValues = () => ({
@@ -49,14 +62,27 @@ const AddUserModal = (props) => {
     display_name: '',
     password: '',
     remark: '',
+    role: ROLE_COMMON,
+    capability: '',
   });
 
   const submit = async (values) => {
     setLoading(true);
-    const res = await API.post(`/api/user/`, values);
+    const payload = {
+      username: values.username,
+      display_name: values.display_name,
+      password: values.password,
+      remark: values.remark,
+      role: values.role,
+    };
+    if (values.role === ROLE_ADMIN && values.capability) {
+      payload.capabilities = [values.capability];
+    }
+    const res = await API.post(`/api/user/`, payload);
     const { success, message } = res.data;
     if (success) {
       showSuccess(t('用户账户创建成功！'));
+      setSelectedRole(ROLE_COMMON);
       formApiRef.current?.setValues(getInitValues());
       props.refresh();
       props.handleClose();
@@ -67,6 +93,7 @@ const AddUserModal = (props) => {
   };
 
   const handleCancel = () => {
+    setSelectedRole(ROLE_COMMON);
     props.handleClose();
   };
 
@@ -173,6 +200,31 @@ const AddUserModal = (props) => {
                       showClear
                     />
                   </Col>
+                  <Col span={24}>
+                    <Form.RadioGroup
+                      field='role'
+                      label={t('用户类型')}
+                      onChange={(e) => setSelectedRole(e.target.value)}
+                    >
+                      <Radio value={ROLE_COMMON}>{t('普通用户')}</Radio>
+                      <Radio value={ROLE_ADMIN}>{t('管理员')}</Radio>
+                    </Form.RadioGroup>
+                  </Col>
+                  {selectedRole === ROLE_ADMIN && (
+                    <Col span={24}>
+                      <Form.RadioGroup
+                        field='capability'
+                        label={t('能力类型 (Capability)')}
+                        rules={[{ required: true, message: t('请选择管理员能力类型') }]}
+                      >
+                        {CAPABILITY_OPTIONS.map((opt) => (
+                          <Radio key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </Radio>
+                        ))}
+                      </Form.RadioGroup>
+                    </Col>
+                  )}
                 </Row>
               </Card>
             </div>

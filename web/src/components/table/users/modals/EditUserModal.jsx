@@ -46,6 +46,7 @@ import {
   Row,
   Col,
   InputNumber,
+  Radio,
 } from '@douyinfe/semi-ui';
 import {
   IconUser,
@@ -54,7 +55,16 @@ import {
   IconLink,
   IconUserGroup,
   IconPlus,
+  IconShield,
 } from '@douyinfe/semi-icons';
+
+const ROLE_ADMIN = 10;
+
+const CAPABILITY_OPTIONS = [
+  { value: 'operator', label: '运营 (Operator)' },
+  { value: 'finance',  label: '财务 (Finance)' },
+  { value: 'admin',    label: '管理员 (Admin) — 全功能' },
+];
 import UserBindingManagementModal from './UserBindingManagementModal';
 
 const { Text, Title } = Typography;
@@ -72,6 +82,8 @@ const EditUserModal = (props) => {
   const formApiRef = useRef(null);
 
   const isEdit = Boolean(userId);
+  // 用于判断是否显示 capability 区块（不放进 Form，避免 PUT /api/user/ 携带多余字段）
+  const [userRole, setUserRole] = useState(0);
 
   const getInitValues = () => ({
     username: '',
@@ -87,6 +99,7 @@ const EditUserModal = (props) => {
     quota: 0,
     group: 'default',
     remark: '',
+    capability: '',
   });
 
   const fetchGroups = async () => {
@@ -107,7 +120,22 @@ const EditUserModal = (props) => {
     const { success, message, data } = res.data;
     if (success) {
       data.password = '';
-      formApiRef.current?.setValues({ ...getInitValues(), ...data });
+      setUserRole(data.role || 0);
+      const formVals = { ...getInitValues(), ...data };
+
+      // 若是管理员，同步拉取 capability
+      if (data.role === ROLE_ADMIN && userId) {
+        try {
+          const capRes = await API.get(`/api/capability/${userId}`);
+          if (capRes.data.success && capRes.data.data?.length > 0) {
+            formVals.capability = capRes.data.data[0];
+          }
+        } catch (_) {
+          // capability 加载失败不阻塞编辑
+        }
+      }
+
+      formApiRef.current?.setValues(formVals);
     } else {
       showError(message);
     }
@@ -131,7 +159,9 @@ const EditUserModal = (props) => {
   /* ----------------------- submit ----------------------- */
   const submit = async (values) => {
     setLoading(true);
-    let payload = { ...values };
+    // capability 不属于 /api/user/ 的字段，单独剔除
+    const { capability, ...rest } = values;
+    let payload = { ...rest };
     if (typeof payload.quota === 'string')
       payload.quota = parseInt(payload.quota) || 0;
     if (userId) {
@@ -140,13 +170,28 @@ const EditUserModal = (props) => {
     const url = userId ? `/api/user/` : `/api/user/self`;
     const res = await API.put(url, payload);
     const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('用户信息更新成功！'));
-      props.refresh();
-      props.handleClose();
-    } else {
+    if (!success) {
       showError(message);
+      setLoading(false);
+      return;
     }
+
+    // 管理员：同步更新 capability
+    if (userRole === ROLE_ADMIN && userId && capability) {
+      try {
+        await API.put(`/api/capability/${userId}`, { capabilities: [capability] });
+      } catch (_) {
+        showError(t('用户信息已保存，但 capability 更新失败'));
+        setLoading(false);
+        props.refresh();
+        props.handleClose();
+        return;
+      }
+    }
+
+    showSuccess(t('用户信息更新成功！'));
+    props.refresh();
+    props.handleClose();
     setLoading(false);
   };
 
@@ -324,6 +369,36 @@ const EditUserModal = (props) => {
                         </Form.Slot>
                       </Col>
                     </Row>
+                  </Card>
+                )}
+
+                {/* 管理员能力设置 */}
+                {userId && userRole === ROLE_ADMIN && (
+                  <Card className='!rounded-2xl shadow-sm border-0'>
+                    <div className='flex items-center mb-2'>
+                      <Avatar
+                        size='small'
+                        color='orange'
+                        className='mr-2 shadow-md'
+                      >
+                        <IconShield size={16} />
+                      </Avatar>
+                      <div>
+                        <Text className='text-lg font-medium'>
+                          {t('管理员能力 (Capability)')}
+                        </Text>
+                        <div className='text-xs text-gray-600'>
+                          {t('设置该管理员的能力类型')}
+                        </div>
+                      </div>
+                    </div>
+                    <Form.RadioGroup field='capability'>
+                      {CAPABILITY_OPTIONS.map((opt) => (
+                        <Radio key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </Radio>
+                      ))}
+                    </Form.RadioGroup>
                   </Card>
                 )}
 

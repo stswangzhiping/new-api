@@ -187,6 +187,14 @@ func SetApiRouter(router *gin.Engine) {
 			customOAuthRoute.PUT("/:id", controller.UpdateCustomOAuthProvider)
 			customOAuthRoute.DELETE("/:id", controller.DeleteCustomOAuthProvider)
 		}
+		// Admin capability management (root only)
+		capabilityRoute := apiRouter.Group("/capability")
+		capabilityRoute.Use(middleware.RootAuth())
+		{
+			capabilityRoute.GET("/:userId", controller.GetAdminCapabilities)
+			capabilityRoute.PUT("/:userId", controller.SetAdminCapabilities)
+		}
+
 		performanceRoute := apiRouter.Group("/performance")
 		performanceRoute.Use(middleware.RootAuth())
 		{
