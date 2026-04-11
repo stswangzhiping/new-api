@@ -187,12 +187,14 @@ func SetApiRouter(router *gin.Engine) {
 			customOAuthRoute.PUT("/:id", controller.UpdateCustomOAuthProvider)
 			customOAuthRoute.DELETE("/:id", controller.DeleteCustomOAuthProvider)
 		}
-		// Admin capability management (root only)
+		// Admin capability management
 		capabilityRoute := apiRouter.Group("/capability")
-		capabilityRoute.Use(middleware.RootAuth())
 		{
-			capabilityRoute.GET("/:userId", controller.GetAdminCapabilities)
-			capabilityRoute.PUT("/:userId", controller.SetAdminCapabilities)
+			// 管理员查询自己的 capability（AdminAuth）
+			capabilityRoute.GET("/self", middleware.AdminAuth(), controller.GetSelfCapabilities)
+			// root 管理指定用户的 capability
+			capabilityRoute.GET("/:userId", middleware.RootAuth(), controller.GetAdminCapabilities)
+			capabilityRoute.PUT("/:userId", middleware.RootAuth(), controller.SetAdminCapabilities)
 		}
 
 		performanceRoute := apiRouter.Group("/performance")

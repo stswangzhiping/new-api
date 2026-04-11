@@ -160,9 +160,9 @@ export const useSidebar = () => {
       }
 
       // 管理员用户：根据 capability 加载侧边栏限制
-      if (userData?.role === 10 && userData?.id) {
+      if (userData?.role === 10) {
         try {
-          const capRes = await API.get(`/api/capability/${userData.id}`);
+          const capRes = await API.get('/api/capability/self');
           if (capRes.data.success && capRes.data.data?.length > 0) {
             const cap = capRes.data.data[0];
             setCapabilityConfig(CAPABILITY_SIDEBAR_CONFIGS[cap] || null);

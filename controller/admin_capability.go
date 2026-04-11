@@ -8,6 +8,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetSelfCapabilities GET /api/capability/self
+// 管理员查询自己的 capability 列表。
+func GetSelfCapabilities(c *gin.Context) {
+	userID := c.GetInt("id")
+	caps, err := model.GetAdminCapabilities(userID)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": caps})
+}
+
 // GetAdminCapabilities GET /api/capability/:userId
 // 查询某管理员的 capability 列表（root 专用）。
 func GetAdminCapabilities(c *gin.Context) {
