@@ -95,6 +95,7 @@ export const useSidebar = () => {
   const [statusState] = useContext(StatusContext);
   const [userConfig, setUserConfig] = useState(null);
   const [capabilityConfig, setCapabilityConfig] = useState(null);
+  const [userCapability, setUserCapability] = useState(null); // 'operator' | 'finance' | 'admin' | null
   const [loading, setLoading] = useState(true);
   const instanceIdRef = useRef(null);
   const hasLoadedOnceRef = useRef(false);
@@ -165,14 +166,18 @@ export const useSidebar = () => {
           const capRes = await API.get('/api/capability/self');
           if (capRes.data.success && capRes.data.data?.length > 0) {
             const cap = capRes.data.data[0];
+            setUserCapability(cap);
             setCapabilityConfig(CAPABILITY_SIDEBAR_CONFIGS[cap] || null);
           } else {
+            setUserCapability(null);
             setCapabilityConfig(null);
           }
         } catch (_) {
+          setUserCapability(null);
           setCapabilityConfig(null);
         }
       } else {
+        setUserCapability(null);
         setCapabilityConfig(null);
       }
     } catch (error) {
@@ -330,6 +335,7 @@ export const useSidebar = () => {
     adminConfig,
     userConfig,
     finalConfig,
+    userCapability,
     isModuleVisible,
     hasSectionVisibleModules,
     getVisibleModules,
