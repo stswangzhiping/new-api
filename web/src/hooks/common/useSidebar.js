@@ -21,6 +21,21 @@ import { useState, useEffect, useMemo, useContext, useRef } from 'react';
 import { StatusContext } from '../../context/Status';
 import { API } from '../../helpers';
 
+// capability 对应的侧边栏限制配置
+// true = 显示，false = 隐藏（在 adminConfig 允许的基础上进一步收窄）
+const CAPABILITY_SIDEBAR_CONFIGS = {
+  operator: {
+    chat:     { enabled: true,  playground: true,  chat: false },
+    console:  { enabled: true,  detail: true,  token: false, log: true, midjourney: false, task: false },
+    personal: { enabled: false, topup: false,  personal: false },
+    admin:    { enabled: true,  channel: false, models: false, deployment: false, redemption: true, user: true, subscription: false, setting: false },
+  },
+  // finance 配置待后续定义
+  finance: null,
+  // admin capability = 全功能，不限制
+  admin: null,
+};
+
 // 创建一个全局事件系统来同步所有useSidebar实例
 const sidebarEventTarget = new EventTarget();
 const SIDEBAR_REFRESH_EVENT = 'sidebar-refresh';
@@ -79,6 +94,7 @@ export const mergeAdminConfig = (savedConfig) => {
 export const useSidebar = () => {
   const [statusState] = useContext(StatusContext);
   const [userConfig, setUserConfig] = useState(null);
+  const [capabilityConfig, setCapabilityConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const instanceIdRef = useRef(null);
   const hasLoadedOnceRef = useRef(false);
@@ -114,23 +130,22 @@ export const useSidebar = () => {
       }
 
       const res = await API.get('/api/user/self');
-      if (res.data.success && res.data.data.sidebar_modules) {
+      const userData = res.data.success ? res.data.data : null;
+
+      if (userData?.sidebar_modules) {
         let config;
-        // 检查sidebar_modules是字符串还是对象
-        if (typeof res.data.data.sidebar_modules === 'string') {
-          config = JSON.parse(res.data.data.sidebar_modules);
+        if (typeof userData.sidebar_modules === 'string') {
+          config = JSON.parse(userData.sidebar_modules);
         } else {
-          config = res.data.data.sidebar_modules;
+          config = userData.sidebar_modules;
         }
         setUserConfig(config);
       } else {
         // 当用户没有配置时，生成一个基于管理员配置的默认用户配置
-        // 这样可以确保权限控制正确生效
         const defaultUserConfig = {};
         Object.keys(adminConfig).forEach((sectionKey) => {
           if (adminConfig[sectionKey]?.enabled) {
             defaultUserConfig[sectionKey] = { enabled: true };
-            // 为每个管理员允许的模块设置默认值为true
             Object.keys(adminConfig[sectionKey]).forEach((moduleKey) => {
               if (
                 moduleKey !== 'enabled' &&
@@ -143,8 +158,25 @@ export const useSidebar = () => {
         });
         setUserConfig(defaultUserConfig);
       }
+
+      // 管理员用户：根据 capability 加载侧边栏限制
+      if (userData?.role === 10 && userData?.id) {
+        try {
+          const capRes = await API.get(`/api/capability/${userData.id}`);
+          if (capRes.data.success && capRes.data.data?.length > 0) {
+            const cap = capRes.data.data[0];
+            setCapabilityConfig(CAPABILITY_SIDEBAR_CONFIGS[cap] || null);
+          } else {
+            setCapabilityConfig(null);
+          }
+        } catch (_) {
+          setCapabilityConfig(null);
+        }
+      } else {
+        setCapabilityConfig(null);
+      }
     } catch (error) {
-      // 出错时也生成默认配置，而不是设置为空对象
+      // 出错时生成默认配置
       const defaultUserConfig = {};
       Object.keys(adminConfig).forEach((sectionKey) => {
         if (adminConfig[sectionKey]?.enabled) {
@@ -157,6 +189,7 @@ export const useSidebar = () => {
         }
       });
       setUserConfig(defaultUserConfig);
+      setCapabilityConfig(null);
     } finally {
       if (shouldShowLoader) {
         setLoading(false);
@@ -212,52 +245,56 @@ export const useSidebar = () => {
   }, [adminConfig]);
 
   // 计算最终的显示配置
+  // 三层叠加：adminConfig ∩ userConfig ∩ capabilityConfig
   const finalConfig = useMemo(() => {
     const result = {};
 
-    // 确保adminConfig已加载
     if (!adminConfig || Object.keys(adminConfig).length === 0) {
       return result;
     }
 
-    // 如果userConfig未加载，等待加载完成
     if (!userConfig) {
       return result;
     }
 
-    // 遍历所有区域
     Object.keys(adminConfig).forEach((sectionKey) => {
       const adminSection = adminConfig[sectionKey];
       const userSection = userConfig[sectionKey];
+      const capSection = capabilityConfig?.[sectionKey];
 
-      // 如果管理员禁用了整个区域，则该区域不显示
       if (!adminSection?.enabled) {
         result[sectionKey] = { enabled: false };
         return;
       }
 
-      // 区域级别：用户可以选择隐藏管理员允许的区域
-      // 当userSection存在时检查enabled状态，否则默认为true
-      const sectionEnabled = userSection ? userSection.enabled !== false : true;
+      // capability 可以整体禁用某个区域
+      const capSectionEnabled = capSection ? capSection.enabled !== false : true;
+      const sectionEnabled =
+        capSectionEnabled &&
+        (userSection ? userSection.enabled !== false : true);
+
       result[sectionKey] = { enabled: sectionEnabled };
 
-      // 功能级别：只有管理员和用户都允许的功能才显示
       Object.keys(adminSection).forEach((moduleKey) => {
         if (moduleKey === 'enabled') return;
 
         const adminAllowed = adminSection[moduleKey];
-        // 当userSection存在时检查模块状态，否则默认为true
         const userAllowed = userSection
           ? userSection[moduleKey] !== false
           : true;
+        // capability 未定义该 key 时视为允许（不限制）
+        const capAllowed =
+          capSection && capSection[moduleKey] !== undefined
+            ? capSection[moduleKey] !== false
+            : true;
 
         result[sectionKey][moduleKey] =
-          adminAllowed && userAllowed && sectionEnabled;
+          adminAllowed && userAllowed && capAllowed && sectionEnabled;
       });
     });
 
     return result;
-  }, [adminConfig, userConfig]);
+  }, [adminConfig, userConfig, capabilityConfig]);
 
   // 检查特定功能是否应该显示
   const isModuleVisible = (sectionKey, moduleKey = null) => {
