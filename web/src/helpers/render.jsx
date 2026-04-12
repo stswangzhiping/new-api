@@ -75,6 +75,8 @@ import {
   Package,
   Server,
   CalendarClock,
+  Receipt,
+  FileBarChart2,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -145,6 +147,10 @@ export function getLucideIcon(key, selected = false) {
       return <Server {...commonProps} color={iconColor} />;
     case 'subscription':
       return <CalendarClock {...commonProps} color={iconColor} />;
+    case 'topup-history':
+      return <Receipt {...commonProps} color={iconColor} />;
+    case 'billing':
+      return <FileBarChart2 {...commonProps} color={iconColor} />;
     case 'setting':
       return <Settings {...commonProps} color={iconColor} />;
     default:

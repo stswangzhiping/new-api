@@ -49,6 +49,8 @@ const routerMap = {
   deployment: '/console/deployment',
   playground: '/console/playground',
   personal: '/console/personal',
+  'topup-history': '/console/topup-history',
+  billing: '/console/billing',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -88,6 +90,16 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('使用日志'),
         itemKey: 'log',
         to: '/log',
+      },
+      {
+        text: t('充值记录'),
+        itemKey: 'topup-history',
+        to: '/topup-history',
+      },
+      {
+        text: t('账单'),
+        itemKey: 'billing',
+        to: '/billing',
       },
       {
         text: t('绘图日志'),

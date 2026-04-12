@@ -76,6 +76,21 @@ func GetRedemption(c *gin.Context) {
 	return
 }
 
+// GetSelfRedemptions handles GET /api/redemption/self
+// Returns the redemption codes that the current user has redeemed.
+func GetSelfRedemptions(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	userId := c.GetInt("id")
+	redemptions, total, err := model.GetRedemptionsByUsedUserId(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(redemptions)
+	common.ApiSuccess(c, pageInfo)
+}
+
 func AddRedemption(c *gin.Context) {
 	redemption := model.Redemption{}
 	err := c.ShouldBindJSON(&redemption)
