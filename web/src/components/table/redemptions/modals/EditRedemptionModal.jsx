@@ -52,7 +52,9 @@ import {
   IconSave,
   IconClose,
   IconGift,
+  IconInfoCircle,
 } from '@douyinfe/semi-icons';
+import { CC_SOURCE } from '../../../../constants/redemption.constants';
 
 const { Text, Title } = Typography;
 
@@ -106,6 +108,9 @@ const EditRedemptionModal = (props) => {
     quota: getDefaultQuotaValue(),
     count: 1,
     expired_time: null,
+    cc_source: CC_SOURCE.UNKNOWN,
+    cc_order_id: '',
+    cc_refundable: false,
   });
 
   const handleCancel = () => {
@@ -149,6 +154,9 @@ const EditRedemptionModal = (props) => {
     localInputs.count = parseInt(localInputs.count) || 0;
     localInputs.quota = parseInt(localInputs.quota) || 0;
     localInputs.name = name;
+    localInputs.cc_source = parseInt(localInputs.cc_source) || CC_SOURCE.UNKNOWN;
+    localInputs.cc_order_id = localInputs.cc_order_id || '';
+    localInputs.cc_refundable = !!localInputs.cc_refundable;
     if (!localInputs.expired_time) {
       localInputs.expired_time = 0;
     } else {
@@ -307,7 +315,7 @@ const EditRedemptionModal = (props) => {
                   </Row>
                 </Card>
 
-                <Card className='!rounded-2xl shadow-sm border-0'>
+                <Card className='!rounded-2xl shadow-sm border-0 mb-6'>
                   {/* Header: Quota Settings */}
                   <div className='flex items-center mb-2'>
                     <Avatar
@@ -370,6 +378,67 @@ const EditRedemptionModal = (props) => {
                               },
                             },
                           ]}
+                          style={{ width: '100%' }}
+                          showClear
+                        />
+                      </Col>
+                    )}
+                  </Row>
+                </Card>
+
+                <Card className='!rounded-2xl shadow-sm border-0'>
+                  {/* Header: Source Info */}
+                  <div className='flex items-center mb-2'>
+                    <Avatar
+                      size='small'
+                      color='orange'
+                      className='mr-2 shadow-md'
+                    >
+                      <IconInfoCircle size={16} />
+                    </Avatar>
+                    <div>
+                      <Text className='text-lg font-medium'>
+                        {t('来源信息')}
+                      </Text>
+                      <div className='text-xs text-gray-600'>
+                        {t('记录兑换码来源，用于退款判断')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Row gutter={12}>
+                    <Col span={12}>
+                      <Form.Select
+                        field='cc_source'
+                        label={t('来源')}
+                        style={{ width: '100%' }}
+                        optionList={[
+                          { value: CC_SOURCE.UNKNOWN, label: t('未知') },
+                          { value: CC_SOURCE.ACTIVITY, label: t('活动赠送') },
+                          { value: CC_SOURCE.PURCHASE, label: t('用户购买') },
+                        ]}
+                        onChange={(val) => {
+                          if (val === CC_SOURCE.PURCHASE) {
+                            formApiRef.current?.setValue('cc_refundable', true);
+                          } else if (val === CC_SOURCE.ACTIVITY) {
+                            formApiRef.current?.setValue('cc_refundable', false);
+                          }
+                        }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Form.Switch
+                        field='cc_refundable'
+                        label={t('可退款')}
+                        extraText={t('用户购买默认可退，活动赠送默认不可退')}
+                      />
+                    </Col>
+                    {values.cc_source === CC_SOURCE.PURCHASE && (
+                      <Col span={24}>
+                        <Form.Input
+                          field='cc_order_id'
+                          label={t('订单号')}
+                          placeholder={t('请输入关联订单号（选填）')}
                           style={{ width: '100%' }}
                           showClear
                         />

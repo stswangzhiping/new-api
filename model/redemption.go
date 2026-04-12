@@ -14,6 +14,13 @@ import (
 // ErrRedeemFailed is returned when redemption fails due to database error
 var ErrRedeemFailed = errors.New("redeem.failed")
 
+// CcSource constants: source of redemption code
+const (
+	CcSourceUnknown  = 0 // 未知来源
+	CcSourceActivity = 1 // 活动赠送（不可退款）
+	CcSourcePurchase = 2 // 用户购买（可退款）
+)
+
 type Redemption struct {
 	Id           int            `json:"id"`
 	UserId       int            `json:"user_id"`
@@ -27,6 +34,10 @@ type Redemption struct {
 	UsedUserId   int            `json:"used_user_id"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+	// cc_ prefixed fields: claw-cloud extensions, safe from upstream conflicts
+	CcSource     int    `json:"cc_source" gorm:"column:cc_source;default:0"`           // 来源：0=未知 1=活动赠送 2=用户购买
+	CcOrderId    string `json:"cc_order_id" gorm:"column:cc_order_id;default:''"`      // 关联订单号（购买时填写）
+	CcRefundable bool   `json:"cc_refundable" gorm:"column:cc_refundable;default:false"` // 是否可退款
 }
 
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
@@ -105,6 +116,32 @@ func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Re
 	return redemptions, total, nil
 }
 
+// GetRedemptionsByUsedUserId returns redemptions that have been redeemed by the given user.
+func GetRedemptionsByUsedUserId(usedUserId, startIdx, num int) (redemptions []*Redemption, total int64, err error) {
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return nil, 0, tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	q := tx.Model(&Redemption{}).Where("used_user_id = ?", usedUserId)
+	if err = q.Count(&total).Error; err != nil {
+		tx.Rollback()
+		return nil, 0, err
+	}
+	if err = q.Order("redeemed_time desc").Limit(num).Offset(startIdx).Find(&redemptions).Error; err != nil {
+		tx.Rollback()
+		return nil, 0, err
+	}
+	if err = tx.Commit().Error; err != nil {
+		return nil, 0, err
+	}
+	return redemptions, total, nil
+}
+
 func GetRedemptionById(id int) (*Redemption, error) {
 	if id == 0 {
 		return nil, errors.New("id 为空！")
@@ -154,7 +191,11 @@ func Redeem(key string, userId int) (quota int, err error) {
 		common.SysError("redemption failed: " + err.Error())
 		return 0, ErrRedeemFailed
 	}
-	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
+	keyPrefix := redemption.Key
+	if len(keyPrefix) > 8 {
+		keyPrefix = keyPrefix[:8] + "..."
+	}
+	RecordTopupLog(userId, redemption.Quota, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d（%s）", logger.LogQuota(redemption.Quota), redemption.Id, keyPrefix))
 	return redemption.Quota, nil
 }
 
@@ -172,7 +213,7 @@ func (redemption *Redemption) SelectUpdate() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (redemption *Redemption) Update() error {
 	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
+	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time", "cc_source", "cc_order_id", "cc_refundable").Updates(redemption).Error
 	return err
 }
 

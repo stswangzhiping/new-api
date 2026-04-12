@@ -25,6 +25,7 @@ import {
   REDEMPTION_STATUS,
   REDEMPTION_STATUS_MAP,
   REDEMPTION_ACTIONS,
+  CC_SOURCE_MAP,
 } from '../../../constants/redemption.constants';
 
 /**
@@ -136,6 +137,29 @@ export const getRedemptionsColumns = ({
       dataIndex: 'used_user_id',
       render: (text) => {
         return <div>{text === 0 ? t('无') : text}</div>;
+      },
+    },
+    {
+      title: t('来源'),
+      dataIndex: 'cc_source',
+      render: (text) => {
+        const cfg = CC_SOURCE_MAP[text ?? 0] || CC_SOURCE_MAP[0];
+        return (
+          <Tag color={cfg.color} shape='circle'>
+            {t(cfg.text)}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t('可退款'),
+      dataIndex: 'cc_refundable',
+      render: (text) => {
+        return text ? (
+          <Tag color='green' shape='circle'>{t('是')}</Tag>
+        ) : (
+          <Tag color='grey' shape='circle'>{t('否')}</Tag>
+        );
       },
     },
     {

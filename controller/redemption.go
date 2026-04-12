@@ -14,6 +14,24 @@ import (
 
 func GetAllRedemptions(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
+	// Optional filter: used_user_id (for claw-cloud per-user history queries)
+	usedUserIdStr := c.Query("used_user_id")
+	if usedUserIdStr != "" {
+		usedUserId, err := strconv.Atoi(usedUserIdStr)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		redemptions, total, err := model.GetRedemptionsByUsedUserId(usedUserId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		pageInfo.SetTotal(int(total))
+		pageInfo.SetItems(redemptions)
+		common.ApiSuccess(c, pageInfo)
+		return
+	}
 	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
@@ -85,12 +103,15 @@ func AddRedemption(c *gin.Context) {
 	for i := 0; i < redemption.Count; i++ {
 		key := common.GetUUID()
 		cleanRedemption := model.Redemption{
-			UserId:      c.GetInt("id"),
-			Name:        redemption.Name,
-			Key:         key,
-			CreatedTime: common.GetTimestamp(),
-			Quota:       redemption.Quota,
-			ExpiredTime: redemption.ExpiredTime,
+			UserId:       c.GetInt("id"),
+			Name:         redemption.Name,
+			Key:          key,
+			CreatedTime:  common.GetTimestamp(),
+			Quota:        redemption.Quota,
+			ExpiredTime:  redemption.ExpiredTime,
+			CcSource:     redemption.CcSource,
+			CcOrderId:    redemption.CcOrderId,
+			CcRefundable: redemption.CcRefundable,
 		}
 		err = cleanRedemption.Insert()
 		if err != nil {
@@ -148,6 +169,9 @@ func UpdateRedemption(c *gin.Context) {
 		cleanRedemption.Name = redemption.Name
 		cleanRedemption.Quota = redemption.Quota
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
+		cleanRedemption.CcSource = redemption.CcSource
+		cleanRedemption.CcOrderId = redemption.CcOrderId
+		cleanRedemption.CcRefundable = redemption.CcRefundable
 	}
 	if statusOnly != "" {
 		cleanRedemption.Status = redemption.Status
