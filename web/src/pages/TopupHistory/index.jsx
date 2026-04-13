@@ -227,7 +227,8 @@ const TopupHistoryPage = () => {
           items = items.filter((r) => r.redeemed_time >= start && r.redeemed_time <= end);
         }
 
-        setRecords(items.map((r, i) => ({ ...r, key: r.id ?? i })));
+        // 用 __rk 作 rowKey，同时把 key（兑换码）另存为 redemption_key 防止覆盖
+        setRecords(items.map((r, i) => ({ ...r, redemption_key: r.key, __rk: r.id ?? i })));
         setTotal(tot);
         setActivePage(page);
       } catch (e) {
@@ -277,16 +278,17 @@ const TopupHistoryPage = () => {
       : []),
     {
       title: t('兑换码'),
-      dataIndex: 'key',
+      dataIndex: 'redemption_key',
       render: (v) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <Text
+          <span
             className='font-mono'
-            style={{ fontSize: 12, maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'middle' }}
+            style={{ fontSize: 12, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'middle', color: 'var(--semi-color-text-1)' }}
+            title={v}
           >
             {v}
-          </Text>
-          <Text copyable={{ content: v }} style={{ fontSize: 0 }}>{' '}</Text>
+          </span>
+          <Text copyable={{ content: v }} style={{ fontSize: 0, lineHeight: 0 }}>{' '}</Text>
         </div>
       ),
     },
@@ -387,7 +389,7 @@ const TopupHistoryPage = () => {
   );
 
   return (
-    <div className='mt-[60px] px-2 mx-auto' style={{ maxWidth: 1400, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className='mt-[60px] px-2' style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {!admin && (
         <StatsCard allRecords={allRecords} currentQuota={currentQuota} t={t} />
       )}
@@ -409,11 +411,10 @@ const TopupHistoryPage = () => {
         <Table
           columns={columns}
           dataSource={records}
-          rowKey='key'
+          rowKey='__rk'
           loading={loading}
           size='small'
           pagination={false}
-          scroll={{ x: 'max-content' }}
           empty={
             <Empty
               image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}

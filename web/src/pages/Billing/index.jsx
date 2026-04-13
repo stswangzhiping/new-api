@@ -114,7 +114,7 @@ const BillingPage = () => {
           }
         }
 
-        setRecords(items.map((r, i) => ({ ...r, key: r.id ?? i })));
+        setRecords(items.map((r, i) => ({ ...r, __rk: r.id ?? i })));
       } catch (e) {
         showError(e.message);
       } finally {
@@ -300,7 +300,7 @@ const BillingPage = () => {
   ) : null;
 
   return (
-    <div className='mt-[60px] px-2 mx-auto' style={{ maxWidth: 1400, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className='mt-[60px] px-2' style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <CardPro
         type='type2'
         searchArea={filtersArea}
@@ -309,14 +309,13 @@ const BillingPage = () => {
         <Table
           columns={columns}
           dataSource={records}
-          rowKey='key'
+          rowKey='__rk'
           loading={loading}
           size='small'
           pagination={false}
           expandedRowRender={expandRowRender}
           expandRowByClick
           rowExpandable={(r) => parseBreakdown(r.model_breakdown).length > 0}
-          scroll={{ x: 'max-content' }}
           empty={
             <Empty
               image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}
