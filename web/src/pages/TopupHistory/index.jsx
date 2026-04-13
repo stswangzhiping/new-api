@@ -3,12 +3,13 @@ import {
   Table,
   Tag,
   Button,
+  Form,
   DatePicker,
   Empty,
   Typography,
-  Tooltip,
   Card,
 } from '@douyinfe/semi-ui';
+import { IconSearch } from '@douyinfe/semi-icons';
 import {
   IllustrationNoResult,
   IllustrationNoResultDark,
@@ -25,7 +26,7 @@ import { DATE_RANGE_PRESETS } from '../../constants/console.constants';
 const { Text } = Typography;
 const PAGE_SIZE = 20;
 
-// ─── Quota 换算 ────────────────────────────────────────────────────────────────
+// ─── Quota 换算（纯数字，不含符号） ──────────────────────────────────────────
 function getCurrencyInfo() {
   const displayType = localStorage.getItem('quota_display_type') || 'USD';
   const quotaPerUnit = parseFloat(localStorage.getItem('quota_per_unit') || '500000');
@@ -44,19 +45,16 @@ function getCurrencyInfo() {
   return { displayType, quotaPerUnit, symbol, rate };
 }
 
-/** quota → 纯数字字符串（不含符号），用于表格值和统计数字 */
 function qToNum(quota) {
   const { displayType, quotaPerUnit, rate } = getCurrencyInfo();
   if (displayType === 'TOKENS') return quota.toLocaleString();
   const usd = quota / quotaPerUnit;
   const val = displayType === 'USD' ? usd : usd * rate;
-  // 较小数字保留2位，大数字不保留小数
   const decimals = val >= 100 ? 0 : val >= 1 ? 2 : 4;
   return val.toLocaleString('zh-CN', { maximumFractionDigits: decimals });
 }
 
-/** 列标题用的符号，e.g. "积分 (✦)" or "费用 ($)" */
-function headerLabel(t) {
+function quotaColHeader(t) {
   const { displayType, symbol } = getCurrencyInfo();
   if (displayType === 'TOKENS') return t('Tokens');
   return `${t('积分')} (${symbol})`;
@@ -91,51 +89,45 @@ function StatsCard({ allRecords, currentQuota, t }) {
     [allRecords],
   );
   const totalTopupQ = totalPurchaseQ + totalGiftQ;
-  const usedQ = Math.max(0, totalTopupQ - currentQuota);
-
-  // 赠送优先消费
+  const usedQ       = Math.max(0, totalTopupQ - currentQuota);
   const currentPurchaseQ =
-    usedQ <= totalGiftQ
-      ? totalPurchaseQ
-      : Math.max(0, totalTopupQ - usedQ);
+    usedQ <= totalGiftQ ? totalPurchaseQ : Math.max(0, totalTopupQ - usedQ);
   const currentGiftQ = Math.max(0, currentQuota - currentPurchaseQ);
 
-  const statStyle = { flex: 1, minWidth: 0 };
-  const dividerStyle = {
+  const { symbol } = getCurrencyInfo();
+
+  const divStyle = {
     width: 1, height: 48, background: 'var(--semi-color-border)',
     flexShrink: 0, margin: '0 28px',
   };
-
   const StatItem = ({ label, mainVal, mainColor, sub }) => (
-    <div style={statStyle}>
+    <div style={{ flex: 1, minWidth: 0 }}>
       <div style={{ fontSize: 12, color: 'var(--semi-color-text-2)', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700, color: mainColor || 'var(--semi-color-text-0)', lineHeight: 1.2 }}>
         {mainVal}
       </div>
-      {sub && (
-        <div style={{ fontSize: 12, color: 'var(--semi-color-text-3)', marginTop: 4 }}>{sub}</div>
-      )}
+      {sub && <div style={{ fontSize: 12, color: 'var(--semi-color-text-3)', marginTop: 4 }}>{sub}</div>}
     </div>
   );
 
   return (
     <Card style={{ borderRadius: 12 }} bodyStyle={{ padding: '20px 24px' }}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <StatItem
-          label={t('当前积分')}
+          label={`${t('当前积分')} (${symbol})`}
           mainVal={qToNum(currentQuota)}
           mainColor='var(--semi-color-primary)'
           sub={`${t('购买')} ${qToNum(currentPurchaseQ)} · ${t('赠送')} ${qToNum(currentGiftQ)}`}
         />
-        <div style={dividerStyle} />
+        <div style={divStyle} />
         <StatItem
-          label={t('已用积分')}
+          label={`${t('已用积分')} (${symbol})`}
           mainVal={qToNum(usedQ)}
           mainColor='var(--semi-color-danger)'
         />
-        <div style={dividerStyle} />
+        <div style={divStyle} />
         <StatItem
-          label={t('总积分')}
+          label={`${t('总积分')} (${symbol})`}
           mainVal={qToNum(totalTopupQ)}
           sub={`${t('购买')} ${qToNum(totalPurchaseQ)} · ${t('赠送')} ${qToNum(totalGiftQ)}`}
         />
@@ -150,34 +142,48 @@ const TopupHistoryPage = () => {
   const isMobile = useIsMobile();
   const admin = isAdmin();
 
-  const [records, setRecords] = useState([]);
-  const [allRecords, setAllRecords] = useState([]);
+  const [records,      setRecords]      = useState([]);
+  const [allRecords,   setAllRecords]   = useState([]);
   const [currentQuota, setCurrentQuota] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [activePage, setActivePage] = useState(1);
-  const [pageSize, setPageSize] = useState(PAGE_SIZE);
-  const [total, setTotal] = useState(0);
-  const [dateRange, setDateRange] = useState(null);
-  const [userIdFilter, setUserIdFilter] = useState('');
+  const [loading,      setLoading]      = useState(false);
+  const [activePage,   setActivePage]   = useState(1);
+  const [pageSize,     setPageSize]     = useState(PAGE_SIZE);
+  const [total,        setTotal]        = useState(0);
+  const [usernameMap,  setUsernameMap]  = useState({});   // id -> username
+  const [formApi,      setFormApi]      = useState(null);
 
-  // 加载当前用户 quota（仅普通用户需要统计）
-  const loadUserQuota = useCallback(async () => {
-    if (admin) return;
+  // 加载用户列表（admin）
+  const loadUsers = useCallback(async () => {
+    if (!admin) return;
     try {
-      const res = await API.get('/api/user/self');
+      const res = await API.get('/api/user/?p=1&page_size=500');
       if (res.data?.success) {
-        setCurrentQuota(res.data.data?.quota ?? 0);
+        const users = Array.isArray(res.data.data)
+          ? res.data.data
+          : res.data.data?.items ?? [];
+        const map = {};
+        users.forEach((u) => { map[u.id] = u.username || u.display_name || String(u.id); });
+        setUsernameMap(map);
       }
     } catch {}
   }, [admin]);
 
-  // 加载全量记录用于统计（仅用户）
+  // 加载当前用户 quota（统计卡片）
+  const loadUserQuota = useCallback(async () => {
+    if (admin) return;
+    try {
+      const res = await API.get('/api/user/self');
+      if (res.data?.success) setCurrentQuota(res.data.data?.quota ?? 0);
+    } catch {}
+  }, [admin]);
+
+  // 加载全量记录（统计卡片用）
   const loadAllForStats = useCallback(async () => {
     if (admin) return;
     try {
       const res = await API.get('/api/redemption/self?p=1&page_size=500');
-      const { success, data } = res.data;
-      if (success) {
+      if (res.data?.success) {
+        const data  = res.data.data;
         const items = Array.isArray(data) ? data : data?.items ?? [];
         setAllRecords(items);
         setTotal(Array.isArray(data) ? items.length : data?.total ?? items.length);
@@ -185,20 +191,13 @@ const TopupHistoryPage = () => {
     } catch {}
   }, [admin]);
 
-  const buildUrl = useCallback(
-    (page, size) => {
-      const base = admin ? '/api/redemption/' : '/api/redemption/self';
-      const params = new URLSearchParams({ p: page, page_size: size });
-      return `${base}?${params}`;
-    },
-    [admin],
-  );
-
   const load = useCallback(
     async (page = 1, size = pageSize) => {
       setLoading(true);
       try {
-        const res = await API.get(buildUrl(page, size));
+        const base   = admin ? '/api/redemption/' : '/api/redemption/self';
+        const params = new URLSearchParams({ p: page, page_size: size });
+        const res    = await API.get(`${base}?${params}`);
         const { success, message, data } = res.data;
         if (!success) { showError(message); return; }
 
@@ -206,17 +205,25 @@ const TopupHistoryPage = () => {
         const tot = Array.isArray(data) ? items.length : data?.total ?? items.length;
 
         if (admin) {
+          // 仅已兑换的
           items = items.filter((r) => r.redeemed_time > 0);
-          if (userIdFilter.trim()) {
-            items = items.filter((r) =>
-              String(r.used_user_id).includes(userIdFilter.trim()),
-            );
+
+          // 客户端用户名过滤
+          const fv = formApi?.getValues() ?? {};
+          const usernameFilter = (fv.username || '').trim().toLowerCase();
+          if (usernameFilter) {
+            items = items.filter((r) => {
+              const name = (usernameMap[r.used_user_id] || '').toLowerCase();
+              return name.includes(usernameFilter) || String(r.used_user_id).includes(usernameFilter);
+            });
           }
         }
 
-        if (dateRange?.[0] && dateRange?.[1]) {
-          const start = dateRange[0].getTime() / 1000;
-          const end   = dateRange[1].getTime() / 1000;
+        // 日期范围过滤
+        const fv = formApi?.getValues() ?? {};
+        if (fv.dateRange?.[0] && fv.dateRange?.[1]) {
+          const start = fv.dateRange[0].getTime() / 1000;
+          const end   = fv.dateRange[1].getTime() / 1000;
           items = items.filter((r) => r.redeemed_time >= start && r.redeemed_time <= end);
         }
 
@@ -229,44 +236,58 @@ const TopupHistoryPage = () => {
         setLoading(false);
       }
     },
-    [admin, buildUrl, dateRange, pageSize, userIdFilter],
+    [admin, formApi, pageSize, usernameMap],
   );
 
   useEffect(() => {
-    load(1, pageSize);
+    loadUsers().then(() => load(1, PAGE_SIZE));
     loadAllForStats();
     loadUserQuota();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const colHeader = headerLabel(t);
+  // usernameMap 加载完成后重新渲染 admin 表格
+  useEffect(() => {
+    if (admin && Object.keys(usernameMap).length > 0) load(1, pageSize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usernameMap]);
+
+  const colHeader = quotaColHeader(t);
 
   const columns = [
     {
       title: t('时间'),
       dataIndex: 'redeemed_time',
-      width: 170,
+      width: 160,
       render: (v) => (
-        <Text className='font-mono text-xs text-[var(--semi-color-text-2)]'>
+        <Text className='font-mono text-xs' style={{ color: 'var(--semi-color-text-2)' }}>
           {formatTs(v)}
         </Text>
       ),
     },
     ...(admin
-      ? [{ title: t('用户 ID'), dataIndex: 'used_user_id', width: 90 }]
+      ? [{
+          title: t('用户名称'),
+          dataIndex: 'used_user_id',
+          width: 120,
+          render: (v) => (
+            <Text>{usernameMap[v] || String(v)}</Text>
+          ),
+        }]
       : []),
     {
       title: t('兑换码'),
       dataIndex: 'key',
       render: (v) => (
-        <Text
-          className='font-mono text-xs'
-          copyable={{ content: v }}
-          ellipsis={{ showTooltip: true }}
-          style={{ maxWidth: 220 }}
-        >
-          {v}
-        </Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Text
+            className='font-mono'
+            style={{ fontSize: 12, maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'middle' }}
+          >
+            {v}
+          </Text>
+          <Text copyable={{ content: v }} style={{ fontSize: 0 }}>{' '}</Text>
+        </div>
       ),
     },
     {
@@ -296,52 +317,81 @@ const TopupHistoryPage = () => {
       dataIndex: 'expired_time',
       width: 120,
       render: (v) => (
-        <Tooltip content={v > 0 ? formatTs(v) : ''} disabled={!v || v === 0}>
-          <Tag size='small' color={!v || v === 0 ? 'green' : 'orange'}>
-            {formatExpiry(v)}
-          </Tag>
-        </Tooltip>
+        <Tag size='small' color={!v || v === 0 ? 'green' : 'orange'}>
+          {formatExpiry(v)}
+        </Tag>
       ),
     },
   ];
 
   const filtersArea = (
-    <div className='flex flex-wrap gap-2 items-end'>
-      <DatePicker
-        type='dateTimeRange'
-        placeholder={[t('开始时间'), t('结束时间')]}
-        showClear
-        size='small'
-        value={dateRange}
-        onChange={(v) => setDateRange(v)}
-        presets={DATE_RANGE_PRESETS.map((p) => ({
-          text: t(p.text),
-          start: p.start(),
-          end: p.end(),
-        }))}
-        style={{ width: isMobile ? '100%' : 340 }}
-      />
-      <Button size='small' type='tertiary' onClick={() => load(1, pageSize)} loading={loading}>
-        {t('查询')}
-      </Button>
-      <Button
-        size='small'
-        type='tertiary'
-        onClick={() => { setDateRange(null); setUserIdFilter(''); load(1, pageSize); }}
-      >
-        {t('重置')}
-      </Button>
-    </div>
+    <Form
+      getFormApi={(api) => setFormApi(api)}
+      onSubmit={() => load(1, pageSize)}
+      allowEmpty
+      autoComplete='off'
+      layout='vertical'
+      trigger='change'
+      stopValidateWithError={false}
+    >
+      <div className='flex flex-col gap-2'>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2'>
+          <div className='col-span-1 lg:col-span-2'>
+            <Form.DatePicker
+              field='dateRange'
+              className='w-full'
+              type='dateTimeRange'
+              placeholder={[t('开始时间'), t('结束时间')]}
+              showClear
+              pure
+              size='small'
+              presets={DATE_RANGE_PRESETS.map((p) => ({
+                text: t(p.text),
+                start: p.start(),
+                end: p.end(),
+              }))}
+            />
+          </div>
+          {admin && (
+            <Form.Input
+              field='username'
+              prefix={<IconSearch />}
+              placeholder={t('用户名称')}
+              showClear
+              pure
+              size='small'
+            />
+          )}
+        </div>
+
+        <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3'>
+          <div />
+          <div className='flex gap-2 w-full sm:w-auto justify-end'>
+            <Button type='tertiary' htmlType='submit' loading={loading} size='small'>
+              {t('查询')}
+            </Button>
+            <Button
+              type='tertiary'
+              size='small'
+              onClick={() => {
+                formApi?.reset();
+                setTimeout(() => load(1, pageSize), 50);
+              }}
+            >
+              {t('重置')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Form>
   );
 
   return (
-    <div className='mt-[60px] px-2' style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* 统计卡片（仅普通用户显示） */}
+    <div className='mt-[60px] px-2 mx-auto' style={{ maxWidth: 1400, display: 'flex', flexDirection: 'column', gap: 16 }}>
       {!admin && (
         <StatsCard allRecords={allRecords} currentQuota={currentQuota} t={t} />
       )}
 
-      {/* 记录表格 */}
       <CardPro
         type='type2'
         searchArea={filtersArea}
@@ -363,7 +413,7 @@ const TopupHistoryPage = () => {
           loading={loading}
           size='small'
           pagination={false}
-          scroll={isMobile ? undefined : { x: 'max-content' }}
+          scroll={{ x: 'max-content' }}
           empty={
             <Empty
               image={<IllustrationNoResult style={{ width: 150, height: 150 }} />}
