@@ -87,6 +87,7 @@ export const getRedemptionsColumns = ({
   redemptions,
   activePage,
   showDeleteRedemptionModal,
+  usernameMap = {},
 }) => {
   return [
     {
@@ -133,10 +134,12 @@ export const getRedemptionsColumns = ({
       },
     },
     {
-      title: t('兑换人ID'),
+      title: t('兑换人'),
       dataIndex: 'used_user_id',
       render: (text) => {
-        return <div>{text === 0 ? t('无') : text}</div>;
+        if (!text || text === 0) return <div>{t('无')}</div>;
+        const name = usernameMap[text];
+        return <div>{name || String(text)}</div>;
       },
     },
     {

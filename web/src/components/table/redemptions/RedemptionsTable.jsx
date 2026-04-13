@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Empty } from '@douyinfe/semi-ui';
 import CardTable from '../../common/ui/CardTable';
 import {
@@ -26,6 +26,7 @@ import {
 } from '@douyinfe/semi-illustrations';
 import { getRedemptionsColumns, isExpired } from './RedemptionsColumnDefs';
 import DeleteRedemptionModal from './modals/DeleteRedemptionModal';
+import { API } from '../../../helpers';
 
 const RedemptionsTable = (redemptionsData) => {
   const {
@@ -50,6 +51,20 @@ const RedemptionsTable = (redemptionsData) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingRecord, setDeletingRecord] = useState(null);
 
+  // User id → username map for displaying redeemer name
+  const [usernameMap, setUsernameMap] = useState({});
+  const loadUsernameMap = useCallback(async () => {
+    try {
+      const res = await API.get('/api/user/?p=1&page_size=500');
+      if (res?.data?.success && Array.isArray(res.data.data)) {
+        const map = {};
+        res.data.data.forEach((u) => { map[u.id] = u.username; });
+        setUsernameMap(map);
+      }
+    } catch (_) {}
+  }, []);
+  useEffect(() => { loadUsernameMap(); }, [loadUsernameMap]);
+
   // Handle show delete modal
   const showDeleteRedemptionModal = (record) => {
     setDeletingRecord(record);
@@ -68,6 +83,7 @@ const RedemptionsTable = (redemptionsData) => {
       redemptions,
       activePage,
       showDeleteRedemptionModal,
+      usernameMap,
     });
   }, [
     t,
@@ -79,6 +95,7 @@ const RedemptionsTable = (redemptionsData) => {
     redemptions,
     activePage,
     showDeleteRedemptionModal,
+    usernameMap,
   ]);
 
   // Handle compact mode by removing fixed positioning
