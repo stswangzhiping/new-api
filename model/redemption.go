@@ -90,11 +90,23 @@ func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Re
 	// Build query based on keyword type
 	query := tx.Model(&Redemption{})
 
+	// Find user IDs whose username matches the keyword (for redeemer search)
+	var matchedUserIds []int
+	DB.Model(&User{}).Where("username LIKE ?", "%"+keyword+"%").Pluck("id", &matchedUserIds)
+
 	// Only try to convert to ID if the string represents a valid integer
 	if id, err := strconv.Atoi(keyword); err == nil {
-		query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
+		if len(matchedUserIds) > 0 {
+			query = query.Where("id = ? OR name LIKE ? OR used_user_id IN ?", id, keyword+"%", matchedUserIds)
+		} else {
+			query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
+		}
 	} else {
-		query = query.Where("name LIKE ?", keyword+"%")
+		if len(matchedUserIds) > 0 {
+			query = query.Where("name LIKE ? OR used_user_id IN ?", keyword+"%", matchedUserIds)
+		} else {
+			query = query.Where("name LIKE ?", keyword+"%")
+		}
 	}
 
 	// Get total count
