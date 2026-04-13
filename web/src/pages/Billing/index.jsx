@@ -139,9 +139,9 @@ const BillingPage = () => {
     {
       title: t('月份'),
       dataIndex: 'year',
-      width: 100,
+      width: 130,
       render: (_, row) => (
-        <Text strong>{monthStr(row.year, row.month)}</Text>
+        <Text strong style={{ whiteSpace: 'nowrap' }}>{monthStr(row.year, row.month)}</Text>
       ),
     },
     ...(admin
