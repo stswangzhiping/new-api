@@ -12,6 +12,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// parseOptionalIntFilter parses a query param as int, returns -1 if empty/invalid (meaning no filter).
+func parseOptionalIntFilter(s string) int {
+	if s == "" {
+		return -1
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return -1
+	}
+	return v
+}
+
 func GetAllRedemptions(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	// Optional filter: used_user_id (for claw-cloud per-user history queries)
@@ -32,7 +44,9 @@ func GetAllRedemptions(c *gin.Context) {
 		common.ApiSuccess(c, pageInfo)
 		return
 	}
-	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	status := parseOptionalIntFilter(c.Query("status"))
+	ccSource := parseOptionalIntFilter(c.Query("cc_source"))
+	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), status, ccSource)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -45,8 +59,10 @@ func GetAllRedemptions(c *gin.Context) {
 
 func SearchRedemptions(c *gin.Context) {
 	keyword := c.Query("keyword")
+	status := parseOptionalIntFilter(c.Query("status"))
+	ccSource := parseOptionalIntFilter(c.Query("cc_source"))
 	pageInfo := common.GetPageQuery(c)
-	redemptions, total, err := model.SearchRedemptions(keyword, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	redemptions, total, err := model.SearchRedemptions(keyword, status, ccSource, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return

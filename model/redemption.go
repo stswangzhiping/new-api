@@ -42,41 +42,15 @@ type Redemption struct {
 	CcRemark     string `json:"cc_remark" gorm:"column:cc_remark;default:''"`             // 备注说明
 }
 
-func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
-	// 开始事务
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// 获取总数
-	err = tx.Model(&Redemption{}).Count(&total).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// 获取分页数据
-	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// 提交事务
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
-	return redemptions, total, nil
+// GetAllRedemptions returns all redemptions with optional status/ccSource filters.
+// Pass status=-1 or ccSource=-1 to skip that filter.
+func GetAllRedemptions(startIdx int, num int, status int, ccSource int) (redemptions []*Redemption, total int64, err error) {
+	return SearchRedemptions("", status, ccSource, startIdx, num)
 }
 
-func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
+// SearchRedemptions searches redemptions by keyword and optional status/ccSource filters.
+// Pass status=-1 or ccSource=-1 to skip that filter.
+func SearchRedemptions(keyword string, status int, ccSource int, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return nil, 0, tx.Error
@@ -87,26 +61,33 @@ func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Re
 		}
 	}()
 
-	// Build query based on keyword type
 	query := tx.Model(&Redemption{})
 
-	// Find user IDs whose username matches the keyword (for redeemer search)
-	var matchedUserIds []int
-	DB.Model(&User{}).Where("username LIKE ?", "%"+keyword+"%").Pluck("id", &matchedUserIds)
+	// Keyword search: match id / name / redeemer username
+	if keyword != "" {
+		var matchedUserIds []int
+		DB.Model(&User{}).Where("username LIKE ?", "%"+keyword+"%").Pluck("id", &matchedUserIds)
+		if id, convErr := strconv.Atoi(keyword); convErr == nil {
+			if len(matchedUserIds) > 0 {
+				query = query.Where("id = ? OR name LIKE ? OR used_user_id IN ?", id, keyword+"%", matchedUserIds)
+			} else {
+				query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
+			}
+		} else {
+			if len(matchedUserIds) > 0 {
+				query = query.Where("name LIKE ? OR used_user_id IN ?", keyword+"%", matchedUserIds)
+			} else {
+				query = query.Where("name LIKE ?", keyword+"%")
+			}
+		}
+	}
 
-	// Only try to convert to ID if the string represents a valid integer
-	if id, err := strconv.Atoi(keyword); err == nil {
-		if len(matchedUserIds) > 0 {
-			query = query.Where("id = ? OR name LIKE ? OR used_user_id IN ?", id, keyword+"%", matchedUserIds)
-		} else {
-			query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
-		}
-	} else {
-		if len(matchedUserIds) > 0 {
-			query = query.Where("name LIKE ? OR used_user_id IN ?", keyword+"%", matchedUserIds)
-		} else {
-			query = query.Where("name LIKE ?", keyword+"%")
-		}
+	// Optional filters
+	if status >= 0 {
+		query = query.Where("status = ?", status)
+	}
+	if ccSource >= 0 {
+		query = query.Where("cc_source = ?", ccSource)
 	}
 
 	// Get total count

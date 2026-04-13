@@ -55,6 +55,8 @@ export const useRedemptionsData = () => {
   // Form state
   const formInitValues = {
     searchKeyword: '',
+    status: '',
+    cc_source: '',
   };
 
   // Get form values
@@ -62,6 +64,8 @@ export const useRedemptionsData = () => {
     const formValues = formApi ? formApi.getValues() : {};
     return {
       searchKeyword: formValues.searchKeyword || '',
+      status: formValues.status ?? '',
+      cc_source: formValues.cc_source ?? '',
     };
   };
 
@@ -70,19 +74,38 @@ export const useRedemptionsData = () => {
     setRedemptions(redemptions);
   };
 
-  // Load redemption list
-  const loadRedemptions = async (page = 1, pageSize) => {
+  // Build API URL with all current filters
+  const buildQueryUrl = (page, ps, overrides = {}) => {
+    const fv = { ...getFormValues(), ...overrides };
+    const keyword = fv.searchKeyword || '';
+    const status  = fv.status ?? '';
+    const ccSource = fv.cc_source ?? '';
+
+    const hasKeyword = keyword !== '';
+    const hasFilter  = status !== '' || ccSource !== '';
+
+    let url;
+    if (hasKeyword) {
+      url = `/api/redemption/search?keyword=${encodeURIComponent(keyword)}&p=${page}&page_size=${ps}`;
+    } else {
+      url = `/api/redemption/?p=${page}&page_size=${ps}`;
+    }
+    if (status !== '') url += `&status=${status}`;
+    if (ccSource !== '') url += `&cc_source=${ccSource}`;
+    return { url, isSearch: hasKeyword || hasFilter };
+  };
+
+  // Unified load function – always reads current form filters
+  const loadRedemptions = async (page = 1, ps = pageSize) => {
     setLoading(true);
     try {
-      const res = await API.get(
-        `/api/redemption/?p=${page}&page_size=${pageSize}`,
-      );
+      const { url } = buildQueryUrl(page, ps);
+      const res = await API.get(url);
       const { success, message, data } = res.data;
       if (success) {
-        const newPageData = data.items;
         setActivePage(data.page <= 0 ? 1 : data.page);
         setTokenCount(data.total);
-        setRedemptionFormat(newPageData);
+        setRedemptionFormat(data.items);
       } else {
         showError(message);
       }
@@ -92,25 +115,17 @@ export const useRedemptionsData = () => {
     setLoading(false);
   };
 
-  // Search redemption codes
+  // Search / filter – resets to page 1
   const searchRedemptions = async () => {
-    const { searchKeyword } = getFormValues();
-    if (searchKeyword === '') {
-      await loadRedemptions(1, pageSize);
-      return;
-    }
-
     setSearching(true);
     try {
-      const res = await API.get(
-        `/api/redemption/search?keyword=${searchKeyword}&p=1&page_size=${pageSize}`,
-      );
+      const { url } = buildQueryUrl(1, pageSize);
+      const res = await API.get(url);
       const { success, message, data } = res.data;
       if (success) {
-        const newPageData = data.items;
         setActivePage(data.page || 1);
         setTokenCount(data.total);
-        setRedemptionFormat(newPageData);
+        setRedemptionFormat(data.items);
       } else {
         showError(message);
       }
@@ -163,35 +178,20 @@ export const useRedemptionsData = () => {
 
   // Refresh data
   const refresh = async (page = activePage) => {
-    const { searchKeyword } = getFormValues();
-    if (searchKeyword === '') {
-      await loadRedemptions(page, pageSize);
-    } else {
-      await searchRedemptions();
-    }
+    await loadRedemptions(page, pageSize);
   };
 
   // Handle page change
   const handlePageChange = (page) => {
     setActivePage(page);
-    const { searchKeyword } = getFormValues();
-    if (searchKeyword === '') {
-      loadRedemptions(page, pageSize);
-    } else {
-      searchRedemptions();
-    }
+    loadRedemptions(page, pageSize);
   };
 
   // Handle page size change
   const handlePageSizeChange = (size) => {
     setPageSize(size);
     setActivePage(1);
-    const { searchKeyword } = getFormValues();
-    if (searchKeyword === '') {
-      loadRedemptions(1, size);
-    } else {
-      searchRedemptions();
-    }
+    loadRedemptions(1, size);
   };
 
   // Row selection configuration

@@ -26,7 +26,6 @@ import {
   showError,
   showSuccess,
   renderQuota,
-  renderQuotaWithPrompt,
 } from '../../../../helpers';
 import {
   displayAmountToQuota,
@@ -341,8 +340,12 @@ const EditRedemptionModal = (props) => {
                     <Col span={12}>
                       <Form.AutoComplete
                         field='quota'
-                        label={t('额度')}
-                        placeholder={t('请输入额度')}
+                        label={t('额度 (✦)')}
+                        placeholder={
+                          values.cc_source === CC_SOURCE.ADJUSTMENT
+                            ? t('正数充值，负数扣减')
+                            : t('请输入额度')
+                        }
                         style={{ width: '100%' }}
                         type='number'
                         rules={[
@@ -350,15 +353,23 @@ const EditRedemptionModal = (props) => {
                           {
                             validator: (rule, v) => {
                               const num = parseInt(v, 10);
+                              if (values.cc_source === CC_SOURCE.ADJUSTMENT) {
+                                return Number.isFinite(num) && num !== 0
+                                  ? Promise.resolve()
+                                  : Promise.reject(t('调账额度不能为0'));
+                              }
                               return num > 0
                                 ? Promise.resolve()
                                 : Promise.reject(t('额度必须大于0'));
                             },
                           },
                         ]}
-                        extraText={renderQuotaWithPrompt(
-                          Number(values.quota) || 0,
-                        )}
+                        extraText={(() => {
+                          const q = Number(values.quota) || 0;
+                          if (q === 0) return '';
+                          const usd = (q / getQuotaPerUnit()).toFixed(2);
+                          return t('等价金额：') + '$' + usd;
+                        })()}
                         data={quotaPresetOptions}
                         showClear
                       />
