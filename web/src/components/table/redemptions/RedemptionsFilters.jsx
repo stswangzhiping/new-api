@@ -18,9 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useRef } from 'react';
-import { Form, Button, Select } from '@douyinfe/semi-ui';
+import { Form, Button } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
-import CompactModeToggle from '../../common/ui/CompactModeToggle';
 import {
   REDEMPTION_STATUS,
   REDEMPTION_STATUS_MAP,
@@ -29,21 +28,11 @@ import {
 } from '../../../constants/redemption.constants';
 
 const RedemptionsFilters = ({
-  // Filter form props
   formInitValues,
   setFormApi,
   searchRedemptions,
   loading,
   searching,
-  // Action button props
-  selectedKeys,
-  setEditingRedemption,
-  setShowEdit,
-  batchCopyRedemptions,
-  batchDeleteRedemptions,
-  // UI props
-  compactMode,
-  setCompactMode,
   t,
 }) => {
   const formApiRef = useRef(null);
@@ -54,16 +43,11 @@ const RedemptionsFilters = ({
     setTimeout(() => searchRedemptions(), 100);
   };
 
-  const handleAddRedemption = () => {
-    setEditingRedemption({ id: undefined });
-    setShowEdit(true);
-  };
-
   const statusOptions = [
     { value: '', label: t('全部状态') },
-    { value: REDEMPTION_STATUS.UNUSED,    label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.UNUSED].text) },
-    { value: REDEMPTION_STATUS.USED,      label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.USED].text) },
-    { value: REDEMPTION_STATUS.DISABLED,  label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.DISABLED].text) },
+    { value: REDEMPTION_STATUS.UNUSED,   label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.UNUSED].text) },
+    { value: REDEMPTION_STATUS.USED,     label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.USED].text) },
+    { value: REDEMPTION_STATUS.DISABLED, label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.DISABLED].text) },
   ];
 
   const sourceOptions = [
@@ -75,36 +59,22 @@ const RedemptionsFilters = ({
   ];
 
   return (
-    <div className='flex flex-wrap items-center gap-2 w-full'>
-      {/* Action buttons */}
-      <Button type='primary' onClick={handleAddRedemption} size='small'>
-        {t('添加兑换码')}
-      </Button>
-      <Button type='tertiary' onClick={batchCopyRedemptions} size='small'>
-        {t('复制所选')}
-      </Button>
-      <Button type='danger' onClick={batchDeleteRedemptions} size='small'>
-        {t('清除失效')}
-      </Button>
-
-      {/* Divider */}
-      <div className='h-4 w-px bg-gray-200 mx-1 hidden md:block' />
-
-      {/* Filter form */}
-      <Form
-        initValues={formInitValues}
-        getFormApi={(api) => {
-          setFormApi(api);
-          formApiRef.current = api;
-        }}
-        onSubmit={searchRedemptions}
-        allowEmpty={true}
-        autoComplete='off'
-        layout='horizontal'
-        trigger='change'
-        stopValidateWithError={false}
-        className='flex flex-wrap items-center gap-2'
-      >
+    <Form
+      initValues={formInitValues}
+      getFormApi={(api) => {
+        setFormApi(api);
+        formApiRef.current = api;
+      }}
+      onSubmit={searchRedemptions}
+      allowEmpty={true}
+      autoComplete='off'
+      layout='horizontal'
+      trigger='change'
+      stopValidateWithError={false}
+      className='w-full'
+    >
+      <div className='flex flex-wrap items-center gap-2 w-full'>
+        {/* Left: filter controls */}
         <Form.Select
           field='status'
           placeholder={t('全部状态')}
@@ -123,7 +93,7 @@ const RedemptionsFilters = ({
           optionList={sourceOptions}
           onChange={() => setTimeout(() => searchRedemptions(), 50)}
         />
-        <div style={{ width: 180 }}>
+        <div style={{ width: 200 }}>
           <Form.Input
             field='searchKeyword'
             prefix={<IconSearch />}
@@ -133,28 +103,23 @@ const RedemptionsFilters = ({
             size='small'
           />
         </div>
-        <Button
-          type='tertiary'
-          htmlType='submit'
-          loading={loading || searching}
-          size='small'
-        >
-          {t('查询')}
-        </Button>
-        <Button type='tertiary' onClick={handleReset} size='small'>
-          {t('重置')}
-        </Button>
-      </Form>
 
-      {/* Compact mode toggle */}
-      <div className='ml-auto'>
-        <CompactModeToggle
-          compactMode={compactMode}
-          setCompactMode={setCompactMode}
-          t={t}
-        />
+        {/* Right: submit buttons */}
+        <div className='flex gap-2 ml-auto'>
+          <Button
+            type='tertiary'
+            htmlType='submit'
+            loading={loading || searching}
+            size='small'
+          >
+            {t('查询')}
+          </Button>
+          <Button type='tertiary' onClick={handleReset} size='small'>
+            {t('重置')}
+          </Button>
+        </div>
       </div>
-    </div>
+    </Form>
   );
 };
 

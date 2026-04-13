@@ -30,6 +30,7 @@ import {
 import {
   displayAmountToQuota,
   getQuotaPerUnit,
+  quotaToDisplayAmount,
 } from '../../../../helpers/quota';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
@@ -57,24 +58,49 @@ import { CC_SOURCE } from '../../../../constants/redemption.constants';
 
 const { Text, Title } = Typography;
 
+// Convert raw quota ↔ human-readable display amount (handles negative for ADJUSTMENT)
+const rawToDisplay = (rawQuota) => {
+  if (!rawQuota) return 0;
+  const { type } = getCurrencyConfig();
+  if (type === 'TOKENS') return rawQuota;
+  const sign = rawQuota < 0 ? -1 : 1;
+  const abs = Math.abs(rawQuota);
+  const usd = abs / getQuotaPerUnit();
+  const { rate } = getCurrencyConfig();
+  const display = type === 'USD' ? usd : usd * (rate || 1);
+  return sign * display;
+};
+
+const displayToRaw = (displayVal) => {
+  const val = parseFloat(displayVal) || 0;
+  if (val === 0) return 0;
+  const { type } = getCurrencyConfig();
+  if (type === 'TOKENS') return Math.round(val);
+  const sign = val < 0 ? -1 : 1;
+  const abs = Math.abs(val);
+  const { rate } = getCurrencyConfig();
+  const usd = type === 'USD' ? abs : abs / (rate || 1);
+  return sign * Math.round(usd * getQuotaPerUnit());
+};
+
 const getRedemptionPresetOptions = () => {
   const { type } = getCurrencyConfig();
 
   if (type === 'TOKENS') {
+    // For TOKENS mode keep original raw values
     return [100000, 500000, 1000000, 5000000, 10000000].map((quota) => ({
       value: quota,
       label: renderQuota(quota),
     }));
   }
 
+  // For USD/CUSTOM mode: value = display amount (credits or USD), label = formatted string
   return [1, 10, 50, 100, 500, 1000]
     .map((amount) => {
       const quota = displayAmountToQuota(amount);
-      if (!Number.isFinite(quota) || quota <= 0) {
-        return null;
-      }
+      if (!Number.isFinite(quota) || quota <= 0) return null;
       return {
-        value: quota,
+        value: amount,
         label: renderQuota(quota),
       };
     })
@@ -83,15 +109,9 @@ const getRedemptionPresetOptions = () => {
 
 const getDefaultQuotaValue = () => {
   const { type } = getCurrencyConfig();
-
-  if (type === 'TOKENS') {
-    return Math.max(1, Math.round(getQuotaPerUnit()));
-  }
-
-  const defaultQuota = displayAmountToQuota(1);
-  return Number.isFinite(defaultQuota) && defaultQuota > 0
-    ? defaultQuota
-    : Math.max(1, Math.round(getQuotaPerUnit()));
+  if (type === 'TOKENS') return Math.max(1, Math.round(getQuotaPerUnit()));
+  // Default: 100 display units (100 credits / $100)
+  return 100;
 };
 
 const EditRedemptionModal = (props) => {
@@ -127,6 +147,11 @@ const EditRedemptionModal = (props) => {
       } else {
         data.expired_time = new Date(data.expired_time * 1000);
       }
+      // Convert raw quota to human-readable display amount for the form
+      if (data.quota != null) {
+        const display = rawToDisplay(data.quota);
+        data.quota = display !== 0 ? display : data.quota;
+      }
       formApiRef.current?.setValues({ ...getInitValues(), ...data });
     } else {
       showError(message);
@@ -152,7 +177,8 @@ const EditRedemptionModal = (props) => {
     setLoading(true);
     let localInputs = { ...values };
     localInputs.count = parseInt(localInputs.count) || 0;
-    localInputs.quota = parseInt(localInputs.quota) || 0;
+    // Convert display amount back to raw quota for submission
+    localInputs.quota = displayToRaw(localInputs.quota);
     localInputs.name = name;
     localInputs.cc_source = parseInt(localInputs.cc_source) || CC_SOURCE.UNKNOWN;
     localInputs.cc_order_id = localInputs.cc_order_id || '';
@@ -365,10 +391,12 @@ const EditRedemptionModal = (props) => {
                           },
                         ]}
                         extraText={(() => {
-                          const q = Number(values.quota) || 0;
-                          if (q === 0) return '';
-                          const usd = (q / getQuotaPerUnit()).toFixed(2);
-                          return t('等价金额：') + '$' + usd;
+                          const displayVal = Number(values.quota) || 0;
+                          if (displayVal === 0) return '';
+                          // displayVal is already in display units; convert to raw quota then to USD
+                          const rawQ = displayToRaw(displayVal);
+                          const usd = (Math.abs(rawQ) / getQuotaPerUnit()).toFixed(2);
+                          return t('等价金额：') + (rawQ < 0 ? '-$' : '$') + usd;
                         })()}
                         data={quotaPresetOptions}
                         showClear

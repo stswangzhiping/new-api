@@ -18,16 +18,51 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Typography } from '@douyinfe/semi-ui';
+import { Typography, Button } from '@douyinfe/semi-ui';
 import { Ticket } from 'lucide-react';
+import CompactModeToggle from '../../common/ui/CompactModeToggle';
 
 const { Text } = Typography;
 
-const RedemptionsDescription = ({ t }) => {
+const RedemptionsDescription = ({
+  compactMode,
+  setCompactMode,
+  setEditingRedemption,
+  setShowEdit,
+  batchCopyRedemptions,
+  batchDeleteRedemptions,
+  t,
+}) => {
+  const handleAdd = () => {
+    setEditingRedemption({ id: undefined });
+    setShowEdit(true);
+  };
+
   return (
-    <div className='flex items-center text-orange-500'>
-      <Ticket size={16} className='mr-2' />
-      <Text>{t('兑换码管理')}</Text>
+    <div className='flex items-center justify-between w-full gap-2'>
+      {/* Left: title */}
+      <div className='flex items-center text-orange-500 shrink-0'>
+        <Ticket size={16} className='mr-2' />
+        <Text>{t('兑换码管理')}</Text>
+      </div>
+
+      {/* Right: action buttons + compact toggle */}
+      <div className='flex items-center gap-2 flex-wrap justify-end'>
+        <Button type='primary' onClick={handleAdd} size='small'>
+          {t('添加兑换码')}
+        </Button>
+        <Button type='tertiary' onClick={batchCopyRedemptions} size='small'>
+          {t('复制所选')}
+        </Button>
+        <Button type='danger' onClick={batchDeleteRedemptions} size='small'>
+          {t('清除失效')}
+        </Button>
+        <CompactModeToggle
+          compactMode={compactMode}
+          setCompactMode={setCompactMode}
+          t={t}
+        />
+      </div>
     </div>
   );
 };

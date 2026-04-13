@@ -62,7 +62,17 @@ const RedemptionsPage = () => {
 
       <CardPro
         type='type1'
-        descriptionArea={<RedemptionsDescription t={t} />}
+        descriptionArea={
+          <RedemptionsDescription
+            compactMode={compactMode}
+            setCompactMode={setCompactMode}
+            setEditingRedemption={setEditingRedemption}
+            setShowEdit={setShowEdit}
+            batchCopyRedemptions={batchCopyRedemptions}
+            batchDeleteRedemptions={batchDeleteRedemptions}
+            t={t}
+          />
+        }
         actionsArea={
           <RedemptionsFilters
             formInitValues={formInitValues}
@@ -70,13 +80,6 @@ const RedemptionsPage = () => {
             searchRedemptions={searchRedemptions}
             loading={loading}
             searching={searching}
-            selectedKeys={selectedKeys}
-            setEditingRedemption={setEditingRedemption}
-            setShowEdit={setShowEdit}
-            batchCopyRedemptions={batchCopyRedemptions}
-            batchDeleteRedemptions={batchDeleteRedemptions}
-            compactMode={compactMode}
-            setCompactMode={setCompactMode}
             t={t}
           />
         }
