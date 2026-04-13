@@ -111,6 +111,7 @@ const EditRedemptionModal = (props) => {
     cc_source: CC_SOURCE.UNKNOWN,
     cc_order_id: '',
     cc_refundable: false,
+    cc_remark: '',
   });
 
   const handleCancel = () => {
@@ -157,6 +158,7 @@ const EditRedemptionModal = (props) => {
     localInputs.cc_source = parseInt(localInputs.cc_source) || CC_SOURCE.UNKNOWN;
     localInputs.cc_order_id = localInputs.cc_order_id || '';
     localInputs.cc_refundable = !!localInputs.cc_refundable;
+    localInputs.cc_remark = localInputs.cc_remark || '';
     if (!localInputs.expired_time) {
       localInputs.expired_time = 0;
     } else {
@@ -413,14 +415,15 @@ const EditRedemptionModal = (props) => {
                         label={t('来源')}
                         style={{ width: '100%' }}
                         optionList={[
-                          { value: CC_SOURCE.UNKNOWN, label: t('未知') },
-                          { value: CC_SOURCE.ACTIVITY, label: t('活动赠送') },
-                          { value: CC_SOURCE.PURCHASE, label: t('用户购买') },
+                          { value: CC_SOURCE.UNKNOWN,    label: t('未知') },
+                          { value: CC_SOURCE.ACTIVITY,   label: t('活动赠送') },
+                          { value: CC_SOURCE.PURCHASE,   label: t('用户购买') },
+                          { value: CC_SOURCE.ADJUSTMENT, label: t('调账') },
                         ]}
                         onChange={(val) => {
                           if (val === CC_SOURCE.PURCHASE) {
                             formApiRef.current?.setValue('cc_refundable', true);
-                          } else if (val === CC_SOURCE.ACTIVITY) {
+                          } else if (val === CC_SOURCE.ACTIVITY || val === CC_SOURCE.ADJUSTMENT) {
                             formApiRef.current?.setValue('cc_refundable', false);
                           }
                         }}
@@ -430,7 +433,7 @@ const EditRedemptionModal = (props) => {
                       <Form.Switch
                         field='cc_refundable'
                         label={t('可退款')}
-                        extraText={t('用户购买默认可退，活动赠送默认不可退')}
+                        extraText={t('用户购买默认可退，赠送/调账默认不可退')}
                       />
                     </Col>
                     {values.cc_source === CC_SOURCE.PURCHASE && (
@@ -444,6 +447,16 @@ const EditRedemptionModal = (props) => {
                         />
                       </Col>
                     )}
+                    <Col span={24}>
+                      <Form.TextArea
+                        field='cc_remark'
+                        label={t('备注')}
+                        placeholder={t('请输入备注说明（选填）')}
+                        style={{ width: '100%' }}
+                        rows={2}
+                        showClear
+                      />
+                    </Col>
                   </Row>
                 </Card>
               </div>
