@@ -56,9 +56,12 @@ const RedemptionsTable = (redemptionsData) => {
   const loadUsernameMap = useCallback(async () => {
     try {
       const res = await API.get('/api/user/?p=1&page_size=500');
-      if (res?.data?.success && Array.isArray(res.data.data)) {
+      if (res?.data?.success) {
+        const users = Array.isArray(res.data.data)
+          ? res.data.data
+          : res.data.data?.items ?? [];
         const map = {};
-        res.data.data.forEach((u) => { map[u.id] = u.username; });
+        users.forEach((u) => { map[u.id] = u.username; });
         setUsernameMap(map);
       }
     } catch (_) {}
