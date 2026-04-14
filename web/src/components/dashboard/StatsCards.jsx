@@ -59,7 +59,7 @@ const StatsCards = ({
                     </Avatar>
                     <div>
                       <div className='text-xs text-gray-500'>{item.title}</div>
-                      <div className='text-sm font-semibold'>
+                      <div className='text-lg font-semibold'>
                         <Skeleton
                           loading={loading}
                           active
@@ -80,7 +80,7 @@ const StatsCards = ({
                       </div>
                     </div>
                   </div>
-                  {item.title === t('当前积分 (✦)') ? (
+                  {item.title === t('当前余额') ? (
                     <Tag
                       color='white'
                       shape='circle'
