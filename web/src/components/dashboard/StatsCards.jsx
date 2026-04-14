@@ -59,7 +59,7 @@ const StatsCards = ({
                     </Avatar>
                     <div>
                       <div className='text-xs text-gray-500'>{item.title}</div>
-                      <div className='text-lg font-semibold'>
+                      <div className='text-sm font-semibold'>
                         <Skeleton
                           loading={loading}
                           active
