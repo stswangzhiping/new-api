@@ -80,19 +80,20 @@ function SourceTag({ src, isSystemGift }) {
 }
 
 // ─── 统计卡片 ──────────────────────────────────────────────────────────────────
-function StatsCard({ allRecords, currentQuota, usedQuota, t }) {
+function StatsCard({ allRecords, currentQuota, t }) {
   const totalPurchaseQ = useMemo(
     () => allRecords.filter((r) => r.cc_source === 2).reduce((s, r) => s + r.quota, 0),
     [allRecords],
   );
+  // cc_source === -1 is system gift; others non-purchase are activity/unknown gifts
   const totalGiftQ = useMemo(
     () => allRecords.filter((r) => r.cc_source !== 2).reduce((s, r) => s + r.quota, 0),
     [allRecords],
   );
-  // 购买/赠送中还剩多少：赠送优先消费
-  const currentPurchaseQ = usedQuota <= totalGiftQ
-    ? totalPurchaseQ
-    : Math.max(0, totalPurchaseQ - (usedQuota - totalGiftQ));
+  const totalTopupQ = totalPurchaseQ + totalGiftQ;
+  const usedQ       = Math.max(0, totalTopupQ - currentQuota);
+  const currentPurchaseQ =
+    usedQ <= totalGiftQ ? totalPurchaseQ : Math.max(0, totalTopupQ - usedQ);
   const currentGiftQ = Math.max(0, currentQuota - currentPurchaseQ);
 
   const { symbol } = getCurrencyInfo();
@@ -123,8 +124,14 @@ function StatsCard({ allRecords, currentQuota, usedQuota, t }) {
         <div style={divStyle} />
         <StatItem
           label={`${t('已用积分')} (${symbol})`}
-          mainVal={qToNum(usedQuota)}
+          mainVal={qToNum(usedQ)}
           mainColor='var(--semi-color-danger)'
+        />
+        <div style={divStyle} />
+        <StatItem
+          label={`${t('总积分')} (${symbol})`}
+          mainVal={qToNum(totalTopupQ)}
+          sub={`${t('购买')} ${qToNum(totalPurchaseQ)} · ${t('赠送')} ${qToNum(totalGiftQ)}`}
         />
       </div>
     </Card>
@@ -140,7 +147,6 @@ const TopupHistoryPage = () => {
   const [records,      setRecords]      = useState([]);
   const [allRecords,   setAllRecords]   = useState([]);
   const [currentQuota, setCurrentQuota] = useState(0);
-  const [usedQuota,    setUsedQuota]    = useState(0);
   const [loading,      setLoading]      = useState(false);
   const [activePage,   setActivePage]   = useState(1);
   const [pageSize,     setPageSize]     = useState(PAGE_SIZE);
@@ -164,15 +170,12 @@ const TopupHistoryPage = () => {
     } catch {}
   }, [admin]);
 
-  // 加载当前用户 quota 和 used_quota（统计卡片）
+  // 加载当前用户 quota（统计卡片）
   const loadUserQuota = useCallback(async () => {
     if (admin) return;
     try {
       const res = await API.get('/api/user/self');
-      if (res.data?.success) {
-        setCurrentQuota(res.data.data?.quota ?? 0);
-        setUsedQuota(res.data.data?.used_quota ?? 0);
-      }
+      if (res.data?.success) setCurrentQuota(res.data.data?.quota ?? 0);
     } catch {}
   }, [admin]);
 
@@ -435,7 +438,7 @@ const TopupHistoryPage = () => {
   return (
     <div className='mt-[60px] px-2' style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {!admin && (
-        <StatsCard allRecords={allRecords} currentQuota={currentQuota} usedQuota={usedQuota} t={t} />
+        <StatsCard allRecords={allRecords} currentQuota={currentQuota} t={t} />
       )}
 
       <CardPro
