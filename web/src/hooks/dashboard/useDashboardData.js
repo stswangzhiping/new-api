@@ -246,9 +246,9 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
   const refresh = useCallback(async () => {
     const data = await loadQuotaData();
-    await loadUptimeData();
+    await Promise.all([loadUptimeData(), getUserData()]);
     return data;
-  }, [loadQuotaData, loadUptimeData]);
+  }, [loadQuotaData, loadUptimeData, getUserData]);
 
   const handleSearchConfirm = useCallback(
     async (updateChartDataCallback) => {

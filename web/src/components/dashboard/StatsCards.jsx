@@ -80,7 +80,7 @@ const StatsCards = ({
                       </div>
                     </div>
                   </div>
-                  {item.title === t('当前余额') ? (
+                  {item.title === t('当前积分 (✦)') ? (
                     <Tag
                       color='white'
                       shape='circle'

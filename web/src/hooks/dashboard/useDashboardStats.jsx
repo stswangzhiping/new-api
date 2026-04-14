@@ -49,7 +49,7 @@ export const useDashboardStats = (
         color: 'bg-blue-50',
         items: [
           {
-            title: t('当前余额'),
+            title: t('当前积分 (✦)'),
             value: renderQuota(userState?.user?.quota),
             icon: <IconMoneyExchangeStroked />,
             avatarColor: 'blue',
@@ -57,7 +57,7 @@ export const useDashboardStats = (
             trendColor: '#3b82f6',
           },
           {
-            title: t('历史消耗'),
+            title: t('已用积分 (✦)'),
             value: renderQuota(userState?.user?.used_quota),
             icon: <IconHistogram />,
             avatarColor: 'purple',
