@@ -71,8 +71,9 @@ function formatExpiry(ts) {
   return new Date(ts * 1000).toLocaleDateString('zh-CN');
 }
 
-function SourceTag({ src }) {
+function SourceTag({ src, isSystemGift }) {
   const { t } = useTranslation();
+  if (isSystemGift) return <Tag color='purple' size='small'>{t('系统赠送')}</Tag>;
   const info = CC_SOURCE_MAP?.[src];
   if (!info) return <Tag size='small'>{t('未知')}</Tag>;
   return <Tag color={info.color} size='small'>{t(info.text)}</Tag>;
@@ -84,6 +85,7 @@ function StatsCard({ allRecords, currentQuota, t }) {
     () => allRecords.filter((r) => r.cc_source === 2).reduce((s, r) => s + r.quota, 0),
     [allRecords],
   );
+  // cc_source === -1 is system gift; others non-purchase are activity/unknown gifts
   const totalGiftQ = useMemo(
     () => allRecords.filter((r) => r.cc_source !== 2).reduce((s, r) => s + r.quota, 0),
     [allRecords],
@@ -177,32 +179,63 @@ const TopupHistoryPage = () => {
     } catch {}
   }, [admin]);
 
+  // 拉取系统赠送日志（type=4，quota<0）并转换为充值记录格式
+  const loadSystemGifts = useCallback(async (userId) => {
+    try {
+      const url = admin && userId
+        ? `/api/log/?type=4&page_size=200&user_id=${userId}`
+        : '/api/log/self?type=4&page_size=200';
+      const res = await API.get(url);
+      if (!res.data?.success) return [];
+      const data = res.data.data;
+      const items = Array.isArray(data) ? data : data?.items ?? [];
+      return items
+        .filter((log) => log.quota < 0)
+        .map((log) => ({
+          redeemed_time: log.created_at,
+          redemption_key: '',
+          name: log.content || '新用户赠送',
+          quota: Math.abs(log.quota),
+          cc_source: -1,
+          expired_time: 0,
+          used_user_id: log.user_id,
+          __rk: `sys-${log.id}`,
+          _isSystemGift: true,
+        }));
+    } catch {
+      return [];
+    }
+  }, [admin]);
+
   // 加载全量记录（统计卡片用）
   const loadAllForStats = useCallback(async () => {
     if (admin) return;
     try {
-      const res = await API.get('/api/redemption/self?p=1&page_size=500');
-      if (res.data?.success) {
-        const data  = res.data.data;
+      const [rdRes, sysGifts] = await Promise.all([
+        API.get('/api/redemption/self?p=1&page_size=500'),
+        loadSystemGifts(),
+      ]);
+      if (rdRes.data?.success) {
+        const data  = rdRes.data.data;
         const items = Array.isArray(data) ? data : data?.items ?? [];
-        setAllRecords(items);
-        setTotal(Array.isArray(data) ? items.length : data?.total ?? items.length);
+        const merged = [...items, ...sysGifts].sort((a, b) => b.redeemed_time - a.redeemed_time);
+        setAllRecords(merged);
+        setTotal(merged.length);
       }
     } catch {}
-  }, [admin]);
+  }, [admin, loadSystemGifts]);
 
   const load = useCallback(
     async (page = 1, size = pageSize) => {
       setLoading(true);
       try {
         const base   = admin ? '/api/redemption/' : '/api/redemption/self';
-        const params = new URLSearchParams({ p: page, page_size: size });
+        const params = new URLSearchParams({ p: 1, page_size: 500 });
         const res    = await API.get(`${base}?${params}`);
         const { success, message, data } = res.data;
         if (!success) { showError(message); return; }
 
         let items = Array.isArray(data) ? data : data?.items ?? [];
-        const tot = Array.isArray(data) ? items.length : data?.total ?? items.length;
 
         if (admin) {
           // 仅已兑换的
@@ -219,16 +252,25 @@ const TopupHistoryPage = () => {
           }
         }
 
+        // 合并系统赠送日志
+        const sysGifts = await loadSystemGifts();
+        let merged = [
+          ...items.map((r, i) => ({ ...r, redemption_key: r.key, __rk: r.id ?? i })),
+          ...sysGifts,
+        ].sort((a, b) => b.redeemed_time - a.redeemed_time);
+
         // 日期范围过滤
         const fv = formApi?.getValues() ?? {};
         if (fv.dateRange?.[0] && fv.dateRange?.[1]) {
           const start = fv.dateRange[0].getTime() / 1000;
           const end   = fv.dateRange[1].getTime() / 1000;
-          items = items.filter((r) => r.redeemed_time >= start && r.redeemed_time <= end);
+          merged = merged.filter((r) => r.redeemed_time >= start && r.redeemed_time <= end);
         }
 
-        // 用 __rk 作 rowKey，同时把 key（兑换码）另存为 redemption_key 防止覆盖
-        setRecords(items.map((r, i) => ({ ...r, redemption_key: r.key, __rk: r.id ?? i })));
+        // 客户端分页
+        const tot = merged.length;
+        const paged = merged.slice((page - 1) * size, page * size);
+        setRecords(paged);
         setTotal(tot);
         setActivePage(page);
       } catch (e) {
@@ -237,7 +279,7 @@ const TopupHistoryPage = () => {
         setLoading(false);
       }
     },
-    [admin, formApi, pageSize, usernameMap],
+    [admin, formApi, pageSize, usernameMap, loadSystemGifts],
   );
 
   useEffect(() => {
@@ -279,18 +321,23 @@ const TopupHistoryPage = () => {
     {
       title: t('兑换码'),
       dataIndex: 'redemption_key',
-      render: (v) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span
-            className='font-mono'
-            style={{ fontSize: 12, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'middle', color: 'var(--semi-color-text-1)' }}
-            title={v}
-          >
-            {v}
-          </span>
-          <Text copyable={{ content: v }} style={{ fontSize: 0, lineHeight: 0 }}>{' '}</Text>
-        </div>
-      ),
+      render: (v, record) => {
+        if (record._isSystemGift) {
+          return <Text style={{ color: 'var(--semi-color-text-3)', fontSize: 12 }}>—</Text>;
+        }
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span
+              className='font-mono'
+              style={{ fontSize: 12, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', verticalAlign: 'middle', color: 'var(--semi-color-text-1)' }}
+              title={v}
+            >
+              {v}
+            </span>
+            <Text copyable={{ content: v }} style={{ fontSize: 0, lineHeight: 0 }}>{' '}</Text>
+          </div>
+        );
+      },
     },
     {
       title: t('名称'),
@@ -312,7 +359,7 @@ const TopupHistoryPage = () => {
       title: t('来源'),
       dataIndex: 'cc_source',
       width: 100,
-      render: (v) => <SourceTag src={v} />,
+      render: (v, record) => <SourceTag src={v} isSystemGift={record._isSystemGift} />,
     },
     {
       title: t('有效期'),

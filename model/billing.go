@@ -89,6 +89,7 @@ func ComputeAndSaveBillingForMonth(userId int, year, month int) error {
 	mStart := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc).Unix()
 	mEnd := time.Date(year, time.Month(month+1), 1, 0, 0, 0, 0, loc).Unix()
 
+
 	// Current month (for back-calculation)
 	now := time.Now().In(loc)
 	curYear, curMonth := now.Year(), int(now.Month())
@@ -185,6 +186,11 @@ func ComputeAndSaveBillingForMonth(userId int, year, month int) error {
 		})
 	}
 	breakdownJSON, _ := json.Marshal(breakdownItems)
+
+	// Skip saving an all-zero record — user likely did not exist or had no activity that month.
+	if openingQuota == 0 && closingQuota == 0 && lastMonthTopup.Total == 0 && lastMonthConsume.Total == 0 {
+		return nil
+	}
 
 	bill := &CcBilling{
 		UserId:         userId,

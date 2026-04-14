@@ -837,6 +837,17 @@ export const getLogsColumns = ({
       title: t('花费'),
       dataIndex: 'quota',
       render: (text, record, index) => {
+        const quota = parseInt(text) || 0;
+        // type 1 (topup) and type 4 (system) show cost only when quota != 0
+        if (record.type === 1 || record.type === 4) {
+          if (!quota) return <></>;
+          const isNegative = quota < 0;
+          return (
+            <span style={{ color: isNegative ? 'var(--semi-color-success)' : 'var(--semi-color-danger)', fontWeight: 500 }}>
+              {isNegative ? '+' : ''}{renderQuota(Math.abs(quota), 6)}
+            </span>
+          );
+        }
         if (
           !(
             record.type === 0 ||
