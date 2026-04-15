@@ -9,11 +9,11 @@ import {
 } from '@douyinfe/semi-ui';
 import {
   IconRefresh,
-  IconTrendUp,
-  IconMoney,
-  IconUser,
   IconGift,
-  IconSafe,
+  IconUser,
+  IconSend,
+  IconStopwatchStroked,
+  IconTypograph,
 } from '@douyinfe/semi-icons';
 import { API, showError } from '../../helpers';
 import { VChart } from '@visactor/react-vchart';
@@ -211,7 +211,7 @@ const OperationsDashboard = () => {
           label='已消耗积分'
           value={`${symbol} ${qToDisplay(data?.consumed_quota ?? 0)}`}
           sub='本月用户实际消耗'
-          icon={IconTrendUp}
+          icon={IconStopwatchStroked}
           color='var(--semi-color-danger)'
           loading={loading}
         />
@@ -219,7 +219,7 @@ const OperationsDashboard = () => {
           label='充值积分'
           value={`${symbol} ${qToDisplay(data?.topup_quota ?? 0)}`}
           sub='本月兑换码充值'
-          icon={IconMoney}
+          icon={IconSend}
           color='var(--semi-color-success)'
           loading={loading}
         />
@@ -273,7 +273,7 @@ const OperationsDashboard = () => {
               className='rounded-xl flex items-center justify-center flex-shrink-0'
               style={{ width: 40, height: 40, background: 'var(--semi-color-primary)18' }}
             >
-              <IconSafe size='extra-large' style={{ color: 'var(--semi-color-primary)' }} />
+              <IconTypograph size='extra-large' style={{ color: 'var(--semi-color-primary)' }} />
             </div>
             <div>
               <Text type='tertiary' size='small'>平台总余额（未消耗）</Text>
