@@ -504,3 +504,62 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 
 	return total, nil
 }
+
+// ─── 运营中心 统计函数 ─────────────────────────────────────────────────────────
+
+// OperationsChannelQuota holds per-channel quota aggregation.
+type OperationsChannelQuota struct {
+	ChannelName string `json:"channel_name"`
+	Quota       int64  `json:"quota"`
+}
+
+// SumLogQuotaByType returns the absolute SUM of quota for the given log type and time range.
+func SumLogQuotaByType(logType int, startTs, endTs int64) (int64, error) {
+	var result struct{ Total int64 }
+	err := LOG_DB.Table("logs").
+		Select("COALESCE(SUM(ABS(quota)), 0) as total").
+		Where("type = ? AND created_at >= ? AND created_at < ?", logType, startTs, endTs).
+		Scan(&result).Error
+	return result.Total, err
+}
+
+// GetChannelQuotaBreakdown returns per-channel quota sums for consumed logs (type=2) in the time range.
+func GetChannelQuotaBreakdown(startTs, endTs int64) ([]OperationsChannelQuota, error) {
+	var results []OperationsChannelQuota
+	err := LOG_DB.Table("logs").
+		Select("channel_name, COALESCE(SUM(quota), 0) as quota").
+		Where("type = ? AND created_at >= ? AND created_at < ?", LogTypeConsume, startTs, endTs).
+		Group("channel_name").
+		Order("quota DESC").
+		Limit(20).
+		Scan(&results).Error
+	return results, err
+}
+
+// CountNewUsers returns the number of users created in the given time range.
+func CountNewUsers(startTs, endTs int64) (int64, error) {
+	var count int64
+	err := DB.Model(&User{}).
+		Where("created_at >= ? AND created_at < ?", startTs, endTs).
+		Count(&count).Error
+	return count, err
+}
+
+// CountActiveUsers returns distinct users who made consume calls in the time range.
+func CountActiveUsers(startTs, endTs int64) (int64, error) {
+	var count int64
+	err := LOG_DB.Raw(
+		"SELECT COUNT(DISTINCT user_id) FROM logs WHERE type = ? AND created_at >= ? AND created_at < ?",
+		LogTypeConsume, startTs, endTs,
+	).Scan(&count).Error
+	return count, err
+}
+
+// SumAllUsersQuota returns the sum of current quota across all active users.
+func SumAllUsersQuota() (int64, error) {
+	var result struct{ Total int64 }
+	err := DB.Model(&User{}).
+		Select("COALESCE(SUM(quota), 0) as total").
+		Scan(&result).Error
+	return result.Total, err
+}

@@ -51,6 +51,7 @@ const routerMap = {
   personal: '/console/personal',
   'topup-history': '/console/topup-history',
   billing: '/console/billing',
+  operations: '/console/operations',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -193,6 +194,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('用户管理'),
         itemKey: 'user',
         to: '/user',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('运营中心'),
+        itemKey: 'operations',
+        to: '/operations',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {

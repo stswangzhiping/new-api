@@ -28,7 +28,7 @@ const CAPABILITY_SIDEBAR_CONFIGS = {
     chat:     { enabled: true,  playground: true,  chat: false },
     console:  { enabled: true,  detail: true,  token: false, log: true, midjourney: false, task: false },
     personal: { enabled: false, topup: false,  personal: false },
-    admin:    { enabled: true,  channel: false, models: false, deployment: false, redemption: true, user: true, subscription: false, setting: false },
+    admin:    { enabled: true,  channel: false, models: false, deployment: false, redemption: true, user: true, subscription: false, operations: false, setting: false },
   },
   // finance 配置待后续定义
   finance: null,
@@ -69,6 +69,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     redemption: true,
     user: true,
     subscription: true,
+    operations: true,
     setting: true,
   },
 };

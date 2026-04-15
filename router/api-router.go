@@ -301,6 +301,11 @@ func SetApiRouter(router *gin.Engine) {
 			billingRoute.GET("/self", middleware.UserAuth(), controller.GetUserBilling)
 			billingRoute.GET("/", middleware.AdminAuth(), controller.GetAdminBilling)
 		}
+
+		operationsRoute := apiRouter.Group("/operations")
+		{
+			operationsRoute.GET("/summary", middleware.AdminAuth(), controller.GetOperationsSummary)
+		}
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
 		logRoute.DELETE("/", middleware.AdminAuth(), controller.DeleteHistoryLogs)

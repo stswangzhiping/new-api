@@ -38,6 +38,7 @@ import TopUp from './pages/TopUp';
 import Log from './pages/Log';
 import TopupHistory from './pages/TopupHistory';
 import Billing from './pages/Billing';
+import Operations from './pages/Operations';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
 import Midjourney from './pages/Midjourney';
@@ -301,6 +302,14 @@ function App() {
             <PrivateRoute>
               <Billing />
             </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/operations'
+          element={
+            <AdminRoute>
+              <Operations />
+            </AdminRoute>
           }
         />
         <Route
