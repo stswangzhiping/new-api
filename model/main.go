@@ -295,7 +295,18 @@ func migrateDB() error {
 			return err
 		}
 	}
+
+	// Back-fill created_at for existing users that were added before this column existed.
+	// Use the current timestamp so they show as "created today" rather than epoch.
+	migrateUsersCreatedAt()
+
 	return nil
+}
+
+// migrateUsersCreatedAt sets created_at = NOW() for rows where created_at is still 0.
+func migrateUsersCreatedAt() {
+	now := time.Now().Unix()
+	DB.Exec("UPDATE users SET created_at = ? WHERE created_at = 0 OR created_at IS NULL", now)
 }
 
 func migrateDBFast() error {

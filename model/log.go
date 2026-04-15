@@ -536,19 +536,12 @@ func GetChannelQuotaBreakdown(startTs, endTs int64) ([]OperationsChannelQuota, e
 	return results, err
 }
 
-// CountNewUsers returns the number of users whose first log entry falls in the given time range.
-// (users table has no created_at; we infer "new user" as first-ever log appearance)
+// CountNewUsers returns the number of users created in the given time range.
 func CountNewUsers(startTs, endTs int64) (int64, error) {
 	var count int64
-	err := LOG_DB.Raw(`
-		SELECT COUNT(DISTINCT user_id)
-		FROM logs l
-		WHERE l.created_at >= ? AND l.created_at < ?
-		  AND NOT EXISTS (
-		      SELECT 1 FROM logs l2
-		      WHERE l2.user_id = l.user_id AND l2.created_at < ?
-		  )
-	`, startTs, endTs, startTs).Scan(&count).Error
+	err := DB.Model(&User{}).
+		Where("created_at >= ? AND created_at < ?", startTs, endTs).
+		Count(&count).Error
 	return count, err
 }
 
