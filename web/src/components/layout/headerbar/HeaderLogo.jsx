@@ -33,9 +33,7 @@ const HeaderLogo = ({
   isDemoSiteMode,
   t,
 }) => {
-  if (isConsoleRoute) {
-    return null;
-  }
+  return null;
 
   return (
     <Link to='/' className='group flex items-center gap-2'>
