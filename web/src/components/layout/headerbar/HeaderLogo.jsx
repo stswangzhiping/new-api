@@ -33,7 +33,7 @@ const HeaderLogo = ({
   isDemoSiteMode,
   t,
 }) => {
-  if (isMobile && isConsoleRoute) {
+  if (isConsoleRoute) {
     return null;
   }
 
