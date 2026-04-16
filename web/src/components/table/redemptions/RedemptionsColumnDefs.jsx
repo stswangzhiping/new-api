@@ -166,6 +166,15 @@ export const getRedemptionsColumns = ({
       },
     },
     {
+      title: t('创建者'),
+      dataIndex: 'user_id',
+      render: (text) => {
+        if (!text || text === 0) return <div>{t('无')}</div>;
+        const name = usernameMap[text];
+        return <div>{name || String(text)}</div>;
+      },
+    },
+    {
       title: '',
       dataIndex: 'operate',
       fixed: 'right',
