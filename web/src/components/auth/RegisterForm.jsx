@@ -87,6 +87,9 @@ const RegisterForm = () => {
   const [turnstileEnabled, setTurnstileEnabled] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [captchaId, setCaptchaId] = useState('');
+  const [captchaImg, setCaptchaImg] = useState('');
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
   const [showWeChatLoginModal, setShowWeChatLoginModal] = useState(false);
   const [showEmailRegister, setShowEmailRegister] = useState(false);
   const [wechatLoading, setWechatLoading] = useState(false);
@@ -229,16 +232,27 @@ const RegisterForm = () => {
         showInfo('请稍后几秒重试，Turnstile 正在检查用户环境！');
         return;
       }
+      if (!turnstileEnabled && captchaAnswer.trim() === '') {
+        showInfo('请输入图形验证码！');
+        return;
+      }
       setRegisterLoading(true);
       try {
         if (!affCode) {
           affCode = localStorage.getItem('aff');
         }
         inputs.aff_code = affCode;
+        const captchaParams = turnstileEnabled
+          ? `turnstile=${turnstileToken}`
+          : `captcha_id=${encodeURIComponent(captchaId)}&captcha_answer=${encodeURIComponent(captchaAnswer)}`;
         const res = await API.post(
-          `/api/user/register?turnstile=${turnstileToken}`,
+          `/api/user/register?${captchaParams}`,
           inputs,
         );
+        if (!res.data?.success) {
+          // refresh captcha on failure
+          if (!turnstileEnabled) loadCaptcha();
+        }
         const { success, message } = res.data;
         if (success) {
           navigate('/login');
@@ -253,6 +267,23 @@ const RegisterForm = () => {
       }
     }
   }
+
+  const loadCaptcha = async () => {
+    try {
+      const res = await API.get('/api/captcha');
+      if (res.data?.success) {
+        setCaptchaId(res.data.data.captcha_id);
+        setCaptchaImg(res.data.data.captcha_img);
+        setCaptchaAnswer('');
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    if (!turnstileEnabled) {
+      loadCaptcha();
+    }
+  }, [turnstileEnabled]);
 
   const sendVerificationCode = async () => {
     if (inputs.email === '') return;
@@ -672,6 +703,36 @@ const RegisterForm = () => {
                         )}
                       </Text>
                     </Checkbox>
+                  </div>
+                )}
+
+                {!turnstileEnabled && captchaImg && (
+                  <div className='pt-2'>
+                    <div className='flex items-center gap-2 mb-1'>
+                      <img
+                        src={captchaImg}
+                        alt='captcha'
+                        className='rounded cursor-pointer h-10 border border-gray-200'
+                        style={{ minWidth: 120 }}
+                        onClick={loadCaptcha}
+                        title={t('点击刷新验证码')}
+                      />
+                      <Button
+                        size='small'
+                        type='tertiary'
+                        onClick={loadCaptcha}
+                      >
+                        {t('刷新')}
+                      </Button>
+                    </div>
+                    <Form.Input
+                      field='captcha_answer'
+                      label={t('验证码')}
+                      placeholder={t('输入图中数字')}
+                      value={captchaAnswer}
+                      onChange={(value) => setCaptchaAnswer(value)}
+                      prefix={<IconKey />}
+                    />
                   </div>
                 )}
 

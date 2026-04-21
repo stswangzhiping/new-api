@@ -137,6 +137,15 @@ func Register(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserPasswordRegisterDisabled)
 		return
 	}
+	// Image captcha verification (skip if Turnstile is configured)
+	if !common.TurnstileCheckEnabled {
+		captchaId := c.Query("captcha_id")
+		captchaAnswer := c.Query("captcha_answer")
+		if !VerifyCaptchaAnswer(captchaId, captchaAnswer) {
+			common.ApiError(c, fmt.Errorf("验证码错误，请刷新后重试"))
+			return
+		}
+	}
 	var user model.User
 	err := json.NewDecoder(c.Request.Body).Decode(&user)
 	if err != nil {
