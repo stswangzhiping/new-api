@@ -76,6 +76,14 @@ func authHelper(c *gin.Context, minRole int) {
 	// get header New-Api-User
 	apiUserIdStr := c.Request.Header.Get("New-Api-User")
 	if apiUserIdStr == "" {
+		common.SysLog(fmt.Sprintf(
+			"UserAuth missing header: path=%s method=%s session_id=%v username=%v access_token=%v",
+			c.Request.URL.Path,
+			c.Request.Method,
+			id,
+			username,
+			useAccessToken,
+		))
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "无权进行此操作，未提供 New-Api-User",
@@ -85,6 +93,15 @@ func authHelper(c *gin.Context, minRole int) {
 	}
 	apiUserId, err := strconv.Atoi(apiUserIdStr)
 	if err != nil {
+		common.SysLog(fmt.Sprintf(
+			"UserAuth invalid header: path=%s method=%s raw=%q session_id=%v username=%v access_token=%v",
+			c.Request.URL.Path,
+			c.Request.Method,
+			apiUserIdStr,
+			id,
+			username,
+			useAccessToken,
+		))
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "无权进行此操作，New-Api-User 格式错误",
@@ -94,6 +111,15 @@ func authHelper(c *gin.Context, minRole int) {
 
 	}
 	if id != apiUserId {
+		common.SysLog(fmt.Sprintf(
+			"UserAuth mismatch: path=%s method=%s header_id=%d session_id=%v username=%v access_token=%v",
+			c.Request.URL.Path,
+			c.Request.Method,
+			apiUserId,
+			id,
+			username,
+			useAccessToken,
+		))
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": "无权进行此操作，New-Api-User 与登录用户不匹配",

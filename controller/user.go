@@ -97,6 +97,13 @@ func setupLogin(user *model.User, c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgUserSessionSaveFailed)
 		return
 	}
+	common.SysLog(fmt.Sprintf(
+		"Login success: user_id=%d username=%s role=%d group=%s",
+		user.Id,
+		user.Username,
+		user.Role,
+		user.Group,
+	))
 	c.JSON(http.StatusOK, gin.H{
 		"message": "",
 		"success": true,
