@@ -23,6 +23,8 @@ const { Text } = Typography;
 
 // ─── Quota 换算（纯数字，不含符号） ──────────────────────────────────────────
 function getCurrencyInfo() {
+  const fixedQuotaPerUnit = parseFloat(localStorage.getItem('quota_per_unit') || '500000');
+  return { quotaPerUnit: fixedQuotaPerUnit, symbol: '$' };
   const displayType  = localStorage.getItem('quota_display_type') || 'USD';
   const quotaPerUnit = parseFloat(localStorage.getItem('quota_per_unit') || '500000');
   let symbol = '$';
@@ -41,6 +43,13 @@ function getCurrencyInfo() {
 }
 
 function qToNum(quota) {
+  const { quotaPerUnit: billingQuotaPerUnit } = getCurrencyInfo();
+  const usdValue = quota / billingQuotaPerUnit;
+  const billingDecimals = usdValue >= 100 ? 0 : usdValue >= 1 ? 2 : 4;
+  return usdValue.toLocaleString('zh-CN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: billingDecimals,
+  });
   const { displayType, quotaPerUnit, rate } = getCurrencyInfo();
   if (displayType === 'TOKENS') return quota.toLocaleString();
   const usd = quota / quotaPerUnit;
