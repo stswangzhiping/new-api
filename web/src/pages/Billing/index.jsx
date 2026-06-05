@@ -86,7 +86,7 @@ function sanitizeFileNamePart(value) {
 }
 
 function buildBillingPdfFileName(row, userAccount) {
-  return `月度账单 ${row.year}年${row.month}月-[${sanitizeFileNamePart(userAccount)}].pdf`;
+  return `月度账单-${row.year}年${row.month}月-${sanitizeFileNamePart(userAccount)}.pdf`;
 }
 
 function buildBillingPdfMarkup({

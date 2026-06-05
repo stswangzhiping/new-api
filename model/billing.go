@@ -98,6 +98,13 @@ func computeAndSaveBillingForMonth(userId int, year, month int, forceSave bool) 
 	mStart := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc).Unix()
 	mEnd := time.Date(year, time.Month(month+1), 1, 0, 0, 0, 0, loc).Unix()
 
+	var user User
+	if err := DB.Select("quota", "created_at").Where("id = ?", userId).First(&user).Error; err != nil {
+		return err
+	}
+	if user.CreatedAt >= mEnd {
+		return nil
+	}
 
 	// Current month (for back-calculation)
 	now := time.Now().In(loc)
@@ -149,11 +156,6 @@ func computeAndSaveBillingForMonth(userId int, year, month int, forceSave bool) 
 	topupPurchase = purSum.Total
 	topupGift = giftSum.Total
 
-	// Current quota from users table
-	var user User
-	if err := DB.Select("quota").Where("id = ?", userId).First(&user).Error; err != nil {
-		return err
-	}
 	currentQuota := int64(user.Quota)
 
 	// Back-calculate closing quota of last month (= opening of current month)
