@@ -82,6 +82,28 @@ function buildBillingPdfFileName(row, userAccount) {
   return `月度账单-${row.year}年${row.month}月-${sanitizeFileNamePart(userAccount)}.pdf`;
 }
 
+const PDF_PAGE_WIDTH_PX = 794;
+const PDF_PAGE_HEIGHT_PX = 1123;
+const PDF_PAGE_PADDING_X = 56;
+const PDF_PAGE_PADDING_TOP_FIRST = 48;
+const PDF_PAGE_PADDING_TOP_CONTINUED = 74;
+const PDF_PAGE_PADDING_BOTTOM = 42;
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function createHtmlNode(doc, html) {
+  const template = doc.createElement('template');
+  template.innerHTML = html.trim();
+  return template.content.firstElementChild;
+}
+
 function buildBillingPdfMarkup({
   row,
   userName,
@@ -89,18 +111,36 @@ function buildBillingPdfMarkup({
   companyName,
   symbol,
   month,
-  topupDetailRows,
+  topupRows,
   breakdownRows,
 }) {
   const styles = `
     * { box-sizing: border-box; margin: 0; padding: 0; }
     .billing-pdf-root {
+      width: ${PDF_PAGE_WIDTH_PX}px;
+      background: #f4f6fb;
+    }
+    .billing-pdf-page {
       font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
       color: #303133;
       background: #fff;
-      padding: 48px 56px;
+      width: ${PDF_PAGE_WIDTH_PX}px;
+      height: ${PDF_PAGE_HEIGHT_PX}px;
+      padding: ${PDF_PAGE_PADDING_TOP_FIRST}px ${PDF_PAGE_PADDING_X}px ${PDF_PAGE_PADDING_BOTTOM}px;
       font-size: 13px;
-      width: 794px;
+      display: flex;
+      flex-direction: column;
+    }
+    .billing-pdf-page--continued {
+      padding-top: ${PDF_PAGE_PADDING_TOP_CONTINUED}px;
+    }
+    .billing-pdf-page + .billing-pdf-page {
+      margin-top: 24px;
+    }
+    .page-content {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
     }
     .page-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #6366f1; padding-bottom: 20px; margin-bottom: 28px; }
     .doc-title  { font-size: 22px; font-weight: 700; color: #1a1a2e; }
@@ -131,162 +171,274 @@ function buildBillingPdfMarkup({
     .key-col { color: #606266; letter-spacing: 0.5px; }
     .model-cell { color: #5b5bd6; font-weight: 500; }
     .empty-row { text-align: center; color: #c0c4cc; padding: 20px; }
-    .page-footer { margin-top: 48px; border-top: 1px solid #ebeef5; padding-top: 14px; text-align: center; font-size: 11px; color: #c0c4cc; }
+    .page-footer { margin-top: 30px; border-top: 1px solid #ebeef5; padding-top: 10px; text-align: center; font-size: 11px; color: #c0c4cc; }
   `;
 
-  const content = `
-    <div class="billing-pdf-root">
-      <div class="page-header">
-        <div>
-          <div class="doc-title">月度账单</div>
-          <div class="doc-period">账单周期：${month}</div>
-        </div>
-        <div class="meta-area">
-          <div><span class="meta-label">生成日期　</span>${new Date(row.generated_at * 1000).toLocaleDateString('zh-CN')}</div>
-          <div><span class="meta-label">生成时间　</span>${new Date(row.generated_at * 1000).toLocaleTimeString('zh-CN', { hour12: false })}</div>
-          <div><span class="meta-label">金额单位　</span>${symbol}</div>
-        </div>
+  const headerHtml = `
+    <div class="page-header">
+      <div>
+        <div class="doc-title">月度账单</div>
+        <div class="doc-period">账单周期：${escapeHtml(month)}</div>
       </div>
-
-      <div class="user-bar">
-        <div>
-          <div class="uf-label">用户姓名</div>
-          <div class="uf-value">${userName}</div>
-        </div>
-        <div>
-          <div class="uf-label">账号</div>
-          <div class="uf-value">${userAccount}</div>
-        </div>
-        ${companyName ? `<div><div class="uf-label">企业名称</div><div class="uf-value">${companyName}</div></div>` : ''}
+      <div class="meta-area">
+        <div><span class="meta-label">生成日期　</span>${escapeHtml(new Date(row.generated_at * 1000).toLocaleDateString('zh-CN'))}</div>
+        <div><span class="meta-label">生成时间　</span>${escapeHtml(new Date(row.generated_at * 1000).toLocaleTimeString('zh-CN', { hour12: false }))}</div>
+        <div><span class="meta-label">金额单位　</span>${escapeHtml(symbol)}</div>
       </div>
-
-      <div class="section">
-        <div class="section-title">一、账单摘要</div>
-        <div class="summary-grid">
-          <div class="summary-card">
-            <div class="sc-label">上月结余 (${symbol})</div>
-            <div class="sc-value muted">${qToNum(row.opening_quota)}</div>
-          </div>
-          <div class="summary-card">
-            <div class="sc-label">本月充值 (${symbol})</div>
-            <div class="sc-value income">${row.topup_total > 0 ? '+' + qToNum(row.topup_total) : '—'}</div>
-            ${row.topup_total > 0 ? `<div class="sc-sub">购买 ${qToNum(row.topup_purchase)} · 赠送 ${qToNum(row.topup_gift)}</div>` : ''}
-          </div>
-          <div class="summary-card">
-            <div class="sc-label">本月消费 (${symbol})</div>
-            <div class="sc-value expense">${qToNum(row.used_quota)}</div>
-          </div>
-          <div class="summary-card">
-            <div class="sc-label">本月结余 (${symbol})</div>
-            <div class="sc-value primary">${qToNum(row.closing_quota)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="section">
-        <div class="section-title">二、本月充值明细</div>
-        <table>
-          <thead>
-            <tr>
-              <th style="width:165px">时间</th>
-              <th style="width:150px">兑换码</th>
-              <th>名称</th>
-              <th class="r" style="width:120px">金额 (${symbol})</th>
-              <th class="center" style="width:90px">来源</th>
-            </tr>
-          </thead>
-          <tbody>${topupDetailRows}</tbody>
-        </table>
-      </div>
-
-      <div class="section">
-        <div class="section-title">三、模型消费明细</div>
-        <table>
-          <thead>
-            <tr>
-              <th>模型</th>
-              <th class="r" style="width:80px">调用次数</th>
-              <th class="r" style="width:110px">输入 tokens</th>
-              <th class="r" style="width:110px">输出 tokens</th>
-              <th class="r" style="width:110px">花费 (${symbol})</th>
-            </tr>
-          </thead>
-          <tbody>${breakdownRows}</tbody>
-        </table>
-      </div>
-
-      <div class="page-footer">CUTOS.AI</div>
     </div>
   `;
 
-  return { styles, content };
+  const userBarHtml = `
+    <div class="user-bar">
+      <div>
+        <div class="uf-label">用户姓名</div>
+        <div class="uf-value">${escapeHtml(userName)}</div>
+      </div>
+      <div>
+        <div class="uf-label">账号</div>
+        <div class="uf-value">${escapeHtml(userAccount)}</div>
+      </div>
+      ${companyName ? `<div><div class="uf-label">企业名称</div><div class="uf-value">${escapeHtml(companyName)}</div></div>` : ''}
+    </div>
+  `;
+
+  const summaryHtml = `
+    <div class="section">
+      <div class="section-title">一、账单摘要</div>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="sc-label">上月结余 (${escapeHtml(symbol)})</div>
+          <div class="sc-value muted">${escapeHtml(qToNum(row.opening_quota))}</div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">本月充值 (${escapeHtml(symbol)})</div>
+          <div class="sc-value income">${row.topup_total > 0 ? '+' + escapeHtml(qToNum(row.topup_total)) : '—'}</div>
+          ${row.topup_total > 0 ? `<div class="sc-sub">购买 ${escapeHtml(qToNum(row.topup_purchase))} · 赠送 ${escapeHtml(qToNum(row.topup_gift))}</div>` : ''}
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">本月消费 (${escapeHtml(symbol)})</div>
+          <div class="sc-value expense">${escapeHtml(qToNum(row.used_quota))}</div>
+        </div>
+        <div class="summary-card">
+          <div class="sc-label">本月结余 (${escapeHtml(symbol)})</div>
+          <div class="sc-value primary">${escapeHtml(qToNum(row.closing_quota))}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const tableSections = [
+    {
+      title: '二、本月充值明细',
+      emptyText: '本月暂无充值记录',
+      columns: [
+        { label: '时间', width: '165px' },
+        { label: '兑换码', width: '150px' },
+        { label: '名称' },
+        { label: `金额 (${symbol})`, width: '120px', className: 'r' },
+        { label: '来源', width: '90px', className: 'center' },
+      ],
+      rows: topupRows,
+    },
+    {
+      title: '三、模型消费明细',
+      emptyText: '暂无模型消费明细',
+      columns: [
+        { label: '模型' },
+        { label: '调用次数', width: '80px', className: 'r' },
+        { label: '输入 tokens', width: '110px', className: 'r' },
+        { label: '输出 tokens', width: '110px', className: 'r' },
+        { label: `花费 (${symbol})`, width: '110px', className: 'r' },
+      ],
+      rows: breakdownRows,
+    },
+  ];
+
+  return {
+    styles,
+    headerHtml,
+    userBarHtml,
+    summaryHtml,
+    tableSections,
+  };
 }
 
-async function downloadBillingPdf({ fileName, styles, content }) {
+function createBillingPdfPage(doc, isFirstPage) {
+  const page = createHtmlNode(
+    doc,
+    `<div class="billing-pdf-page${isFirstPage ? '' : ' billing-pdf-page--continued'}">
+      <div class="page-content"></div>
+      <div class="page-footer">CUTOS.AI</div>
+    </div>`,
+  );
+  return {
+    element: page,
+    content: page.querySelector('.page-content'),
+  };
+}
+
+function isContentOverflowing(page) {
+  return page.content.scrollHeight > page.content.clientHeight + 1;
+}
+
+function createTableChunk(doc, section, showTitle) {
+  const wrapper = createHtmlNode(doc, '<div class="section"></div>');
+  if (showTitle) {
+    wrapper.appendChild(createHtmlNode(doc, `<div class="section-title">${escapeHtml(section.title)}</div>`));
+  }
+
+  const table = createHtmlNode(doc, '<table><thead><tr></tr></thead><tbody></tbody></table>');
+  const headerRow = table.querySelector('thead tr');
+  section.columns.forEach((column) => {
+    const th = doc.createElement('th');
+    th.textContent = column.label;
+    if (column.width) {
+      th.style.width = column.width;
+    }
+    if (column.className) {
+      th.className = column.className;
+    }
+    headerRow.appendChild(th);
+  });
+  wrapper.appendChild(table);
+
+  return {
+    wrapper,
+    tbody: table.querySelector('tbody'),
+  };
+}
+
+function createTableRow(doc, row, columnCount) {
+  if (row?.empty) {
+    return createHtmlNode(
+      doc,
+      `<tr><td colspan="${columnCount}" class="empty-row">${escapeHtml(row.text)}</td></tr>`,
+    );
+  }
+
+  const tr = doc.createElement('tr');
+  (row?.cells || []).forEach((cell) => {
+    const td = doc.createElement('td');
+    td.textContent = cell.text ?? '';
+    if (cell.className) {
+      td.className = cell.className;
+    }
+    tr.appendChild(td);
+  });
+  return tr;
+}
+
+function buildBillingPdfPages({
+  doc,
+  root,
+  headerHtml,
+  userBarHtml,
+  summaryHtml,
+  tableSections,
+}) {
+  const pages = [];
+  const createPage = (isFirstPage = false) => {
+    const page = createBillingPdfPage(doc, isFirstPage);
+    root.appendChild(page.element);
+    pages.push(page);
+    return page;
+  };
+
+  const firstPage = createPage(true);
+  firstPage.content.appendChild(createHtmlNode(doc, headerHtml));
+  firstPage.content.appendChild(createHtmlNode(doc, userBarHtml));
+  firstPage.content.appendChild(createHtmlNode(doc, summaryHtml));
+
+  tableSections.forEach((section) => {
+    const rows = section.rows?.length ? section.rows : [{ empty: true, text: section.emptyText }];
+    let page = pages[pages.length - 1];
+    let chunk = createTableChunk(doc, section, true);
+    page.content.appendChild(chunk.wrapper);
+
+    if (isContentOverflowing(page)) {
+      page.content.removeChild(chunk.wrapper);
+      page = createPage(false);
+      chunk = createTableChunk(doc, section, true);
+      page.content.appendChild(chunk.wrapper);
+    }
+
+    let hasRenderedRows = false;
+
+    rows.forEach((row) => {
+      const rowNode = createTableRow(doc, row, section.columns.length);
+      chunk.tbody.appendChild(rowNode);
+
+      if (!isContentOverflowing(page)) {
+        hasRenderedRows = true;
+        return;
+      }
+
+      chunk.tbody.removeChild(rowNode);
+      const needsTitle = !hasRenderedRows;
+      const hasRowsOnCurrentPage = chunk.tbody.children.length > 0;
+      if (!hasRowsOnCurrentPage) {
+        page.content.removeChild(chunk.wrapper);
+      }
+
+      page = createPage(false);
+      chunk = createTableChunk(doc, section, needsTitle);
+      page.content.appendChild(chunk.wrapper);
+      chunk.tbody.appendChild(rowNode);
+
+      hasRenderedRows = true;
+    });
+  });
+
+  return pages;
+}
+
+async function downloadBillingPdf({
+  fileName,
+  styles,
+  headerHtml,
+  userBarHtml,
+  summaryHtml,
+  tableSections,
+}) {
   const container = document.createElement('div');
   container.style.position = 'fixed';
   container.style.left = '-10000px';
   container.style.top = '0';
-  container.style.width = '794px';
+  container.style.width = `${PDF_PAGE_WIDTH_PX}px`;
   container.style.background = '#ffffff';
   container.style.zIndex = '-1';
-  container.innerHTML = `<style>${styles}</style>${content}`;
+  container.innerHTML = `<style>${styles}</style><div class="billing-pdf-root"></div>`;
   document.body.appendChild(container);
 
   try {
     if (document.fonts?.ready) {
       await document.fonts.ready;
     }
-    await new Promise((resolve) => window.requestAnimationFrame(resolve));
 
     const root = container.querySelector('.billing-pdf-root');
-    const canvas = await html2canvas(root, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
+    const pages = buildBillingPdfPages({
+      doc: document,
+      root,
+      headerHtml,
+      userBarHtml,
+      summaryHtml,
+      tableSections,
     });
 
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = 210;
-    const pageHeight = 297;
-    const margin = 10;
-    const renderWidth = pageWidth - margin * 2;
-    const renderHeight = pageHeight - margin * 2;
-    const pxPerMm = canvas.width / renderWidth;
-    const pageCanvasHeight = Math.max(1, Math.floor(renderHeight * pxPerMm));
-
-    let renderedHeight = 0;
-    let pageIndex = 0;
-
-    while (renderedHeight < canvas.height) {
-      const sliceHeight = Math.min(pageCanvasHeight, canvas.height - renderedHeight);
-      const pageCanvas = document.createElement('canvas');
-      pageCanvas.width = canvas.width;
-      pageCanvas.height = sliceHeight;
-
-      const pageContext = pageCanvas.getContext('2d');
-      pageContext.drawImage(
-        canvas,
-        0,
-        renderedHeight,
-        canvas.width,
-        sliceHeight,
-        0,
-        0,
-        canvas.width,
-        sliceHeight,
-      );
-
-      if (pageIndex > 0) {
+    for (let i = 0; i < pages.length; i += 1) {
+      const canvas = await html2canvas(pages[i].element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      if (i > 0) {
         pdf.addPage();
       }
-
-      const imageHeight = (sliceHeight * renderWidth) / canvas.width;
-      pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', margin, margin, renderWidth, imageHeight);
-
-      renderedHeight += sliceHeight;
-      pageIndex += 1;
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
     }
 
     pdf.save(fileName);
@@ -335,41 +487,40 @@ async function generatePdf(row, userInfoMap, t) {
   } catch {}
 
   const breakdown = parseBreakdown(row.model_breakdown);
-  const breakdownRows = breakdown.length
-    ? breakdown.map((r) => `<tr>
-        <td class="model-cell">${r.model || '—'}</td>
-        <td class="r">${(r.calls || 0).toLocaleString()}</td>
-        <td class="r">${(r.promptTokens || 0).toLocaleString()}</td>
-        <td class="r">${(r.completionTokens || 0).toLocaleString()}</td>
-        <td class="r expense mono">${qToNum(r.quota || 0)}</td>
-      </tr>`).join('')
-    : `<tr><td colspan="5" class="empty-row">暂无模型消费明细</td></tr>`;
+  const breakdownDetailRows = breakdown.map((r) => ({
+    cells: [
+      { text: r.model || '—', className: 'model-cell' },
+      { text: (r.calls || 0).toLocaleString(), className: 'r' },
+      { text: (r.promptTokens || 0).toLocaleString(), className: 'r' },
+      { text: (r.completionTokens || 0).toLocaleString(), className: 'r' },
+      { text: qToNum(r.quota || 0), className: 'r expense mono' },
+    ],
+  }));
 
-  const topupDetailRows = topupRows.length
-    ? topupRows.map((r) => `<tr>
-        <td class="mono">${new Date(r.redeemed_time * 1000).toLocaleString('zh-CN', { hour12: false })}</td>
-        <td class="mono key-col">${maskKey(r.key)}</td>
-        <td>${r.name || '—'}</td>
-        <td class="r income mono">${qToNum(r.quota || 0)}</td>
-        <td class="center">${SOURCE_LABEL[r.cc_source] ?? '未知'}</td>
-      </tr>`).join('')
-    : `<tr><td colspan="5" class="empty-row">本月暂无充值记录</td></tr>`;
+  const topupDetailRows = topupRows.map((r) => ({
+    cells: [
+      { text: new Date(r.redeemed_time * 1000).toLocaleString('zh-CN', { hour12: false }), className: 'mono' },
+      { text: maskKey(r.key), className: 'mono key-col' },
+      { text: r.name || '—' },
+      { text: qToNum(r.quota || 0), className: 'r income mono' },
+      { text: SOURCE_LABEL[r.cc_source] ?? '未知', className: 'center' },
+    ],
+  }));
 
-  const { styles, content } = buildBillingPdfMarkup({
+  const pdfMarkup = buildBillingPdfMarkup({
     row,
     userName,
     userAccount,
     companyName,
     symbol,
     month,
-    topupDetailRows,
-    breakdownRows,
+    topupRows: topupDetailRows,
+    breakdownRows: breakdownDetailRows,
   });
 
   await downloadBillingPdf({
     fileName: buildBillingPdfFileName(row, userAccount),
-    styles,
-    content,
+    ...pdfMarkup,
   });
   Toast.success(t('PDF 已下载'));
 }
