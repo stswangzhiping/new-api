@@ -1,7 +1,6 @@
 package model
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -79,6 +78,16 @@ func SaveCcBilling(b *CcBilling) error {
 // ComputeAndSaveBillingForMonth generates the billing record for (userId, year, month)
 // if it does not already exist, and returns the full billing list for that user.
 func ComputeAndSaveBillingForMonth(userId int, year, month int) error {
+	return computeAndSaveBillingForMonth(userId, year, month, false)
+}
+
+// ComputeAndSaveBillingForMonthForce generates the billing record even when
+// the computed snapshot is all zero. This is used by admin-triggered queries.
+func ComputeAndSaveBillingForMonthForce(userId int, year, month int) error {
+	return computeAndSaveBillingForMonth(userId, year, month, true)
+}
+
+func computeAndSaveBillingForMonth(userId int, year, month int, forceSave bool) error {
 	exists, err := CcBillingExistsByUserMonth(userId, year, month)
 	if err != nil || exists {
 		return err
@@ -185,10 +194,10 @@ func ComputeAndSaveBillingForMonth(userId int, year, month int) error {
 			Quota:            r.Quota,
 		})
 	}
-	breakdownJSON, _ := json.Marshal(breakdownItems)
+	breakdownJSON, _ := common.Marshal(breakdownItems)
 
 	// Skip saving an all-zero record — user likely did not exist or had no activity that month.
-	if openingQuota == 0 && closingQuota == 0 && lastMonthTopup.Total == 0 && lastMonthConsume.Total == 0 {
+	if !forceSave && openingQuota == 0 && closingQuota == 0 && lastMonthTopup.Total == 0 && lastMonthConsume.Total == 0 {
 		return nil
 	}
 

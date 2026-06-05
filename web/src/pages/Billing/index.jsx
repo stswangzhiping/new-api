@@ -68,7 +68,7 @@ function maskKey(key) {
 const SOURCE_LABEL = { 0: '未知', 1: '活动赠送', 2: '用户购买' };
 
 // ─── PDF 生成 ──────────────────────────────────────────────────────────────────
-async function generatePdf(row, usernameMap, t) {
+async function generatePdf(row, userInfoMap, t) {
   const { symbol } = getCurrencyInfo();
   const month = `${row.year}年${row.month}月`;
 
@@ -76,17 +76,20 @@ async function generatePdf(row, usernameMap, t) {
   let userName = '—', userAccount = '—', companyName = '';
   try {
     const stored = JSON.parse(localStorage.getItem('user') || '{}');
-    userName    = stored.display_name || stored.username || '—';
+    userName = stored.display_name || stored.username || '—';
     userAccount = stored.username || '—';
+    companyName = stored.display_name || '';
   } catch {}
 
-  // admin 查看他人账单时，覆盖用户名
   if (isAdmin() && row.user_id) {
-    const mapped = usernameMap[row.user_id];
-    if (mapped) { userName = mapped; userAccount = mapped; }
+    const mapped = userInfoMap[row.user_id];
+    if (mapped) {
+      userName = mapped.displayName || mapped.username || String(row.user_id);
+      userAccount = mapped.username || String(row.user_id);
+      companyName = mapped.displayName || '';
+    }
   }
 
-  // 拉当月充值明细
   let topupRows = [];
   try {
     const mStart = new Date(row.year, row.month - 1, 1).getTime() / 1000;
@@ -275,7 +278,7 @@ const BillingPage = () => {
   const [records,     setRecords]     = useState([]);
   const [loading,     setLoading]     = useState(false);
   const [pdfLoading,  setPdfLoading]  = useState({});   // rowId -> bool
-  const [usernameMap, setUsernameMap] = useState({});
+  const [userInfoMap, setUserInfoMap] = useState({});
   const [formApi,     setFormApi]     = useState(null);
 
   const { symbol } = getCurrencyInfo();
@@ -289,18 +292,49 @@ const BillingPage = () => {
           ? res.data.data
           : res.data.data?.items ?? [];
         const map = {};
-        users.forEach((u) => { map[u.id] = u.username || u.display_name || String(u.id); });
-        setUsernameMap(map);
+        users.forEach((u) => {
+          map[u.id] = {
+            username: u.username || String(u.id),
+            displayName: u.display_name || '',
+            label: u.username || u.display_name || String(u.id),
+          };
+        });
+        setUserInfoMap(map);
       }
     } catch {}
   }, [admin]);
+
+  const resolveBillingUserId = useCallback((keyword) => {
+    const normalizedKeyword = (keyword || '').trim().toLowerCase();
+    if (!normalizedKeyword) {
+      return '';
+    }
+
+    const exactMatches = Object.entries(userInfoMap).filter(([id, info]) => {
+      const stringId = String(id);
+      const username = (info?.username || '').toLowerCase();
+      const displayName = (info?.displayName || '').toLowerCase();
+      return (
+        stringId === normalizedKeyword ||
+        username === normalizedKeyword ||
+        displayName === normalizedKeyword
+      );
+    });
+
+    return exactMatches.length === 1 ? exactMatches[0][0] : '';
+  }, [userInfoMap]);
 
   const load = useCallback(
     async (uid) => {
       setLoading(true);
       try {
+        const formValues = formApi?.getValues() ?? {};
+        const nameFilter = (formValues.username || '').trim();
+        const resolvedUserId = admin
+          ? uid || resolveBillingUserId(nameFilter)
+          : uid;
         const url = admin
-          ? `/api/billing/${uid ? `?user_id=${uid}` : ''}`
+          ? `/api/billing/${resolvedUserId ? `?user_id=${resolvedUserId}` : ''}`
           : '/api/billing/self';
         const res = await API.get(url);
         const { success, message, data } = res.data;
@@ -308,12 +342,19 @@ const BillingPage = () => {
 
         let items = Array.isArray(data) ? data : data?.items ?? [];
         if (admin) {
-          const fv = formApi?.getValues() ?? {};
-          const nameFilter = (fv.username || '').trim().toLowerCase();
-          if (nameFilter) {
+          const loweredNameFilter = nameFilter.toLowerCase();
+          if (loweredNameFilter) {
             items = items.filter((r) => {
-              const name = (usernameMap[r.user_id] || '').toLowerCase();
-              return name.includes(nameFilter) || String(r.user_id).includes(nameFilter);
+              const userInfo = userInfoMap[r.user_id] || {};
+              const label = (userInfo.label || '').toLowerCase();
+              const username = (userInfo.username || '').toLowerCase();
+              const displayName = (userInfo.displayName || '').toLowerCase();
+              return (
+                label.includes(loweredNameFilter) ||
+                username.includes(loweredNameFilter) ||
+                displayName.includes(loweredNameFilter) ||
+                String(r.user_id).includes(loweredNameFilter)
+              );
             });
           }
         }
@@ -324,20 +365,20 @@ const BillingPage = () => {
         setLoading(false);
       }
     },
-    [admin, formApi, usernameMap],
+    [admin, formApi, resolveBillingUserId, userInfoMap],
   );
 
   useEffect(() => { loadUsers().then(() => load('')); }, []);
-  useEffect(() => { if (admin && Object.keys(usernameMap).length > 0) load(''); }, [usernameMap]);
+  useEffect(() => { if (admin && Object.keys(userInfoMap).length > 0) load(''); }, [userInfoMap]);
 
   const handleDownloadPdf = useCallback(async (row) => {
     setPdfLoading(prev => ({ ...prev, [row.__rk]: true }));
     try {
-      await generatePdf(row, usernameMap, t);
+      await generatePdf(row, userInfoMap, t);
     } finally {
       setPdfLoading(prev => ({ ...prev, [row.__rk]: false }));
     }
-  }, [usernameMap, t]);
+  }, [userInfoMap, t]);
 
   const expandRowRender = (record) => {
     const items = parseBreakdown(record.model_breakdown);
@@ -373,7 +414,7 @@ const BillingPage = () => {
     },
     ...(admin ? [{
       title: t('用户名称'), dataIndex: 'user_id', width: 120,
-      render: (v) => <Text>{usernameMap[v] || String(v)}</Text>,
+      render: (v) => <Text>{userInfoMap[v]?.label || String(v)}</Text>,
     }] : []),
     {
       title: `${t('上月结余')} (${symbol})`, dataIndex: 'opening_quota', align: 'right', width: 140,

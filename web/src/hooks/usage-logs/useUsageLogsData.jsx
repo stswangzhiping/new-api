@@ -27,7 +27,6 @@ import {
   showError,
   showSuccess,
   timestamp2string,
-  renderQuota,
   renderNumber,
   getLogOther,
   copy,
@@ -69,6 +68,7 @@ export const useLogsData = () => {
   const [showStat, setShowStat] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingStat, setLoadingStat] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [activePage, setActivePage] = useState(1);
   const [logCount, setLogCount] = useState(0);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
@@ -258,6 +258,49 @@ export const useLogsData = () => {
       request_id: formValues.request_id || '',
       logType: formValues.logType ? parseInt(formValues.logType) : 0,
     };
+  };
+
+  const buildLogsUrl = (page, size, customLogType = null) => {
+    const {
+      username,
+      token_name,
+      model_name,
+      start_timestamp,
+      end_timestamp,
+      channel,
+      group,
+      request_id,
+      logType: formLogType,
+    } = getFormValues();
+
+    const currentLogType =
+      customLogType !== null
+        ? customLogType
+        : formLogType !== undefined
+          ? formLogType
+          : logType;
+
+    const localStartTimestamp = Date.parse(start_timestamp) / 1000;
+    const localEndTimestamp = Date.parse(end_timestamp) / 1000;
+
+    if (isAdminUser) {
+      return encodeURI(
+        `/api/log/?p=${page}&page_size=${size}&type=${currentLogType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}&request_id=${request_id}`,
+      );
+    }
+
+    return encodeURI(
+      `/api/log/self/?p=${page}&page_size=${size}&type=${currentLogType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${group}&request_id=${request_id}`,
+    );
+  };
+
+  const fetchLogsPage = async (page, size, customLogType = null) => {
+    const res = await API.get(buildLogsUrl(page, size, customLogType));
+    const { success, message, data } = res.data;
+    if (!success) {
+      throw new Error(message);
+    }
+    return data;
   };
 
   // Statistics functions
@@ -723,48 +766,18 @@ export const useLogsData = () => {
   // Load logs function
   const loadLogs = async (startIdx, pageSize, customLogType = null) => {
     setLoading(true);
-
-    let url = '';
-    const {
-      username,
-      token_name,
-      model_name,
-      start_timestamp,
-      end_timestamp,
-      channel,
-      group,
-      request_id,
-      logType: formLogType,
-    } = getFormValues();
-
-    const currentLogType =
-      customLogType !== null
-        ? customLogType
-        : formLogType !== undefined
-          ? formLogType
-          : logType;
-
-    let localStartTimestamp = Date.parse(start_timestamp) / 1000;
-    let localEndTimestamp = Date.parse(end_timestamp) / 1000;
-    if (isAdminUser) {
-      url = `/api/log/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}&request_id=${request_id}`;
-    } else {
-      url = `/api/log/self/?p=${startIdx}&page_size=${pageSize}&type=${currentLogType}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&group=${group}&request_id=${request_id}`;
-    }
-    url = encodeURI(url);
-    const res = await API.get(url);
-    const { success, message, data } = res.data;
-    if (success) {
+    try {
+      const data = await fetchLogsPage(startIdx, pageSize, customLogType);
       const newPageData = data.items;
       setActivePage(data.page);
       setPageSize(data.page_size);
       setLogCount(data.total);
-
       setLogsFormat(newPageData);
-    } else {
-      showError(message);
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // Page handlers
@@ -801,6 +814,212 @@ export const useLogsData = () => {
     }
   };
 
+  const fetchAllLogsForExport = async () => {
+    const exportPageSize = 500;
+    const allLogs = [];
+    let currentPage = 1;
+    let total = 0;
+
+    while (true) {
+      const data = await fetchLogsPage(currentPage, exportPageSize);
+      const items = Array.isArray(data?.items) ? data.items : [];
+      total = data?.total || 0;
+      allLogs.push(...items);
+
+      if (!items.length || allLogs.length >= total) {
+        break;
+      }
+      currentPage += 1;
+    }
+
+    return allLogs;
+  };
+
+  const getLogTypeLabel = (type) => {
+    switch (Number(type)) {
+      case 1:
+        return 'Top Up';
+      case 2:
+        return 'Consume';
+      case 3:
+        return 'Manage';
+      case 4:
+        return 'System';
+      case 5:
+        return 'Error';
+      case 6:
+        return 'Refund';
+      default:
+        return 'Unknown';
+    }
+  };
+
+  const getCacheReadTokens = (other) => {
+    const parsed = getLogOther(other);
+    return Number(parsed?.cache_tokens) || 0;
+  };
+
+  const getFirstResponseSeconds = (log) => {
+    if (!log?.is_stream) {
+      return '';
+    }
+    const parsed = getLogOther(log.other);
+    const frt = Number(parsed?.frt);
+    if (!Number.isFinite(frt)) {
+      return '';
+    }
+    return (frt / 1000).toFixed(3);
+  };
+
+  const formatCsvQuota = (log) => {
+    const quota = Number(log?.quota) || 0;
+    if (!quota) {
+      return '';
+    }
+
+    const quotaPerUnit = parseFloat(localStorage.getItem('quota_per_unit') || '500000');
+    const quotaDisplayType = localStorage.getItem('quota_display_type') || 'USD';
+    const absQuota = Math.abs(quota);
+    let numericValue = absQuota / quotaPerUnit;
+    let digits = 6;
+
+    if (quotaDisplayType === 'TOKENS') {
+      numericValue = absQuota;
+      digits = 0;
+    } else if (quotaDisplayType === 'CNY') {
+      let rate = 1;
+      try {
+        const status = JSON.parse(localStorage.getItem('status') || '{}');
+        rate = Number(status?.usd_exchange_rate) || 1;
+      } catch {}
+      numericValue = (absQuota / quotaPerUnit) * rate;
+      digits = 2;
+    } else if (quotaDisplayType === 'CUSTOM') {
+      let rate = 1;
+      try {
+        const status = JSON.parse(localStorage.getItem('status') || '{}');
+        rate = Number(status?.custom_currency_exchange_rate) || 1;
+      } catch {}
+      numericValue = (absQuota / quotaPerUnit) * rate;
+      digits = 2;
+    }
+
+    const logContent = String(log?.content || '');
+    const isRefund = Number(log?.type) === 6;
+    const isRedeemCodeTopup =
+      Number(log?.type) === 1 &&
+      (logContent.includes('兑换码') || logContent.includes('鍏戞崲鐮'));
+    const isSystemGift =
+      Number(log?.type) === 4 &&
+      (logContent.includes('新用户注册赠送') ||
+        logContent.includes('使用邀请码赠送') ||
+        logContent.includes('邀请用户赠送') ||
+        logContent.includes('用户签到') ||
+        logContent.includes('鏂扮敤鎴锋敞鍐岃禒閫') ||
+        logContent.includes('浣跨敤閭€璇风爜璧犻€') ||
+        logContent.includes('閭€璇风敤鎴疯禒閫') ||
+        logContent.includes('鐢ㄦ埛绛惧埌'));
+    const sign = isRefund || isRedeemCodeTopup || isSystemGift ? '-' : '';
+    if (digits === 0) {
+      return `${sign}${Math.round(numericValue)}`;
+    }
+    return `${sign}${numericValue.toFixed(digits)}`;
+  };
+
+  const getExportAccountName = () => {
+    const formValues = getFormValues();
+    const targetAccount =
+      isAdminUser && formValues.username?.trim()
+        ? formValues.username.trim()
+        : (() => {
+            try {
+              const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+              return storedUser.username || '';
+            } catch {
+              return '';
+            }
+          })();
+
+    return (targetAccount || 'user').replace(/[<>:\"/\\\\|?*]+/g, '_');
+  };
+
+  const getExportFileDate = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const handleExportCsv = async () => {
+    if (exporting) {
+      return;
+    }
+    setExporting(true);
+    try {
+      const allLogs = await fetchAllLogsForExport();
+      if (allLogs.length === 0) {
+        showError('No data');
+        return;
+      }
+
+      const headers = [
+        'Time',
+        ...(isAdminUser ? ['User'] : []),
+        'Token',
+        'Group',
+        'Type',
+        'Model',
+        'Use Time(s)',
+        'First Token(s)',
+        'Prompt Tokens',
+        'Cache Tokens',
+        'Completion Tokens',
+        'Cost(✦)',
+        'IP',
+        'Details',
+      ];
+
+      const rows = allLogs.map((log) => [
+        timestamp2string(log.created_at),
+        ...(isAdminUser ? [log.username || ''] : []),
+        log.token_name || '',
+        log.group || '',
+        getLogTypeLabel(log.type),
+        log.model_name || '',
+        log.type === 2 || log.type === 5 ? log.use_time || '' : '',
+        getFirstResponseSeconds(log),
+        log.prompt_tokens || '',
+        getCacheReadTokens(log.other) || '',
+        log.completion_tokens || '',
+        formatCsvQuota(log),
+        log.ip || '',
+        log.content || '',
+      ]);
+
+      const csv = [headers, ...rows]
+        .map((row) =>
+          row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','),
+        )
+        .join('\n');
+
+      const blob = new Blob([`\uFEFF${csv}`], {
+        type: 'text/csv;charset=utf-8;',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `usage-logs-${getExportFileDate()}-${getExportAccountName()}.csv`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      showSuccess('CSV exported');
+    } catch (error) {
+      showError(error.message || 'CSV export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Initialize data
   useEffect(() => {
     const localPageSize =
@@ -834,6 +1053,7 @@ export const useLogsData = () => {
     showStat,
     loading,
     loadingStat,
+    exporting,
     activePage,
     logCount,
     pageSize,
@@ -883,6 +1103,7 @@ export const useLogsData = () => {
     handlePageSizeChange,
     refresh,
     copyText,
+    handleExportCsv,
     handleEyeClick,
     setLogsFormat,
     hasExpandableRows,
