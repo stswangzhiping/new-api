@@ -47,17 +47,10 @@ function getCurrencyInfo() {
 function qToNum(quota) {
   const { quotaPerUnit: billingQuotaPerUnit } = getCurrencyInfo();
   const usdValue = quota / billingQuotaPerUnit;
-  const billingDecimals = usdValue >= 100 ? 0 : usdValue >= 1 ? 2 : 4;
   return usdValue.toLocaleString('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: billingDecimals,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
-  const { displayType, quotaPerUnit, rate } = getCurrencyInfo();
-  if (displayType === 'TOKENS') return quota.toLocaleString();
-  const usd = quota / quotaPerUnit;
-  const val = displayType === 'USD' ? usd : usd * rate;
-  const decimals = val >= 100 ? 0 : val >= 1 ? 2 : 4;
-  return val.toLocaleString('zh-CN', { maximumFractionDigits: decimals });
 }
 
 // ─── 工具 ──────────────────────────────────────────────────────────────────────

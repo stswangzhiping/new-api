@@ -14,7 +14,7 @@ import (
 // Generates last-month billing on-demand, returns all billing for current user.
 func GetUserBilling(c *gin.Context) {
 	userId := c.GetInt("id")
-	if err := ensureLastMonthBilling(userId); err != nil {
+	if err := ensureBillingHistory(userId, true); err != nil {
 		common.SysLog("billing generate warn: " + err.Error())
 	}
 	billings, err := model.GetCcBillingsByUser(userId)
@@ -33,8 +33,7 @@ func GetAdminBilling(c *gin.Context) {
 	if uidStr := c.Query("user_id"); uidStr != "" {
 		if uid, err := strconv.Atoi(uidStr); err == nil {
 			userId = uid
-			// Also trigger generation for this user
-			if err2 := ensureLastMonthBilling(userId); err2 != nil {
+			if err2 := ensureBillingHistory(userId, true); err2 != nil {
 				common.SysLog("billing generate warn: " + err2.Error())
 			}
 		}
@@ -45,7 +44,7 @@ func GetAdminBilling(c *gin.Context) {
 		return
 	}
 	if userId > 0 && total == 0 {
-		if err = ensureLastMonthBillingForce(userId); err != nil {
+		if err = ensureBillingHistory(userId, true); err != nil {
 			common.SysLog("billing force generate warn: " + err.Error())
 		}
 		billings, total, err = model.GetAllCcBillingsForAdmin(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
@@ -59,15 +58,31 @@ func GetAdminBilling(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
-// ensureLastMonthBilling generates last month's billing for userId if not yet exist.
-func ensureLastMonthBilling(userId int) error {
+func ensureBillingHistory(userId int, force bool) error {
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		return err
+	}
 	loc := time.FixedZone("CST", 8*3600)
 	last := time.Now().In(loc).AddDate(0, -1, 0)
-	return model.ComputeAndSaveBillingForMonth(userId, last.Year(), int(last.Month()))
-}
-
-func ensureLastMonthBillingForce(userId int) error {
-	loc := time.FixedZone("CST", 8*3600)
-	last := time.Now().In(loc).AddDate(0, -1, 0)
-	return model.ComputeAndSaveBillingForMonthForce(userId, last.Year(), int(last.Month()))
+	start := time.Date(last.Year(), last.Month(), 1, 0, 0, 0, 0, loc)
+	if user.CreatedAt > 0 {
+		createdAt := time.Unix(user.CreatedAt, 0).In(loc)
+		start = time.Date(createdAt.Year(), createdAt.Month(), 1, 0, 0, 0, 0, loc)
+	}
+	end := time.Date(last.Year(), last.Month(), 1, 0, 0, 0, 0, loc)
+	if start.After(end) {
+		return nil
+	}
+	for cursor := start; !cursor.After(end); cursor = cursor.AddDate(0, 1, 0) {
+		if force {
+			err = model.ComputeAndSaveBillingForMonthForce(userId, cursor.Year(), int(cursor.Month()))
+		} else {
+			err = model.ComputeAndSaveBillingForMonth(userId, cursor.Year(), int(cursor.Month()))
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
