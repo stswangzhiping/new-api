@@ -143,7 +143,7 @@ async function generatePdf(row, userInfoMap, t) {
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8"/>
-<title>月度账单 ${row.year}年${row.month}月</title>
+<title>月度账单 ${row.year}年${row.month}月-${userAccount}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
