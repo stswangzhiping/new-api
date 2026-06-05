@@ -13,6 +13,8 @@ import {
   IllustrationNoResult,
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { useTranslation } from 'react-i18next';
 import CardPro from '../../components/common/ui/CardPro';
 import { API, showError } from '../../helpers';
@@ -77,11 +79,233 @@ function maskKey(key) {
 const SOURCE_LABEL = { 0: '未知', 1: '活动赠送', 2: '用户购买' };
 
 // ─── PDF 生成 ──────────────────────────────────────────────────────────────────
+function sanitizeFileNamePart(value) {
+  return String(value || 'user')
+    .replace(/[<>:"/\\|?*]+/g, '_')
+    .trim() || 'user';
+}
+
+function buildBillingPdfFileName(row, userAccount) {
+  return `月度账单 ${row.year}年${row.month}月-[${sanitizeFileNamePart(userAccount)}].pdf`;
+}
+
+function buildBillingPdfMarkup({
+  row,
+  userName,
+  userAccount,
+  companyName,
+  symbol,
+  month,
+  topupDetailRows,
+  breakdownRows,
+}) {
+  const styles = `
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    .billing-pdf-root {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+      color: #303133;
+      background: #fff;
+      padding: 48px 56px;
+      font-size: 13px;
+      width: 794px;
+    }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #6366f1; padding-bottom: 20px; margin-bottom: 28px; }
+    .doc-title  { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+    .doc-period { font-size: 13px; color: #6366f1; margin-top: 4px; font-weight: 600; }
+    .meta-area  { text-align: right; line-height: 1.9; color: #606266; }
+    .meta-label { color: #909399; font-size: 11px; }
+    .user-bar { background: #f5f7fa; border-radius: 8px; padding: 14px 20px; display: flex; gap: 40px; margin-bottom: 28px; flex-wrap: wrap; }
+    .uf-label { font-size: 11px; color: #909399; margin-bottom: 2px; }
+    .uf-value { font-size: 13px; font-weight: 600; color: #303133; }
+    .section { margin-bottom: 32px; }
+    .section-title { font-size: 14px; font-weight: 700; color: #303133; border-left: 3px solid #6366f1; padding-left: 10px; margin-bottom: 14px; }
+    .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .summary-card { background: #f5f7fa; border-radius: 8px; padding: 14px 18px; }
+    .sc-label { font-size: 11px; color: #909399; margin-bottom: 6px; }
+    .sc-value { font-size: 20px; font-weight: 700; line-height: 1.2; }
+    .sc-sub   { font-size: 11px; color: #c0c4cc; margin-top: 4px; }
+    .income  { color: #1ac44d; }
+    .expense { color: #f56c6c; }
+    .primary { color: #6366f1; }
+    .muted   { color: #909399; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f5f7fa; font-weight: 600; color: #606266; font-size: 12px; padding: 9px 12px; text-align: left; border-bottom: 1px solid #ebeef5; }
+    td { padding: 8px 12px; border-bottom: 1px solid #f5f7fa; font-size: 12px; }
+    tr:last-child td { border-bottom: none; }
+    .r { text-align: right; }
+    .center { text-align: center; }
+    .mono { font-family: 'SFMono-Regular', Consolas, monospace; }
+    .key-col { color: #606266; letter-spacing: 0.5px; }
+    .model-cell { color: #5b5bd6; font-weight: 500; }
+    .empty-row { text-align: center; color: #c0c4cc; padding: 20px; }
+    .page-footer { margin-top: 48px; border-top: 1px solid #ebeef5; padding-top: 14px; text-align: center; font-size: 11px; color: #c0c4cc; }
+  `;
+
+  const content = `
+    <div class="billing-pdf-root">
+      <div class="page-header">
+        <div>
+          <div class="doc-title">月度账单</div>
+          <div class="doc-period">账单周期：${month}</div>
+        </div>
+        <div class="meta-area">
+          <div><span class="meta-label">生成日期　</span>${new Date(row.generated_at * 1000).toLocaleDateString('zh-CN')}</div>
+          <div><span class="meta-label">生成时间　</span>${new Date(row.generated_at * 1000).toLocaleTimeString('zh-CN', { hour12: false })}</div>
+          <div><span class="meta-label">金额单位　</span>${symbol}</div>
+        </div>
+      </div>
+
+      <div class="user-bar">
+        <div>
+          <div class="uf-label">用户姓名</div>
+          <div class="uf-value">${userName}</div>
+        </div>
+        <div>
+          <div class="uf-label">账号</div>
+          <div class="uf-value">${userAccount}</div>
+        </div>
+        ${companyName ? `<div><div class="uf-label">企业名称</div><div class="uf-value">${companyName}</div></div>` : ''}
+      </div>
+
+      <div class="section">
+        <div class="section-title">一、账单摘要</div>
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="sc-label">上月结余 (${symbol})</div>
+            <div class="sc-value muted">${qToNum(row.opening_quota)}</div>
+          </div>
+          <div class="summary-card">
+            <div class="sc-label">本月充值 (${symbol})</div>
+            <div class="sc-value income">${row.topup_total > 0 ? '+' + qToNum(row.topup_total) : '—'}</div>
+            ${row.topup_total > 0 ? `<div class="sc-sub">购买 ${qToNum(row.topup_purchase)} · 赠送 ${qToNum(row.topup_gift)}</div>` : ''}
+          </div>
+          <div class="summary-card">
+            <div class="sc-label">本月消费 (${symbol})</div>
+            <div class="sc-value expense">${qToNum(row.used_quota)}</div>
+          </div>
+          <div class="summary-card">
+            <div class="sc-label">本月结余 (${symbol})</div>
+            <div class="sc-value primary">${qToNum(row.closing_quota)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">二、本月充值明细</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width:165px">时间</th>
+              <th style="width:150px">兑换码</th>
+              <th>名称</th>
+              <th class="r" style="width:120px">金额 (${symbol})</th>
+              <th class="center" style="width:90px">来源</th>
+            </tr>
+          </thead>
+          <tbody>${topupDetailRows}</tbody>
+        </table>
+      </div>
+
+      <div class="section">
+        <div class="section-title">三、模型消费明细</div>
+        <table>
+          <thead>
+            <tr>
+              <th>模型</th>
+              <th class="r" style="width:80px">调用次数</th>
+              <th class="r" style="width:110px">输入 tokens</th>
+              <th class="r" style="width:110px">输出 tokens</th>
+              <th class="r" style="width:110px">花费 (${symbol})</th>
+            </tr>
+          </thead>
+          <tbody>${breakdownRows}</tbody>
+        </table>
+      </div>
+
+      <div class="page-footer">CUTOS.AI</div>
+    </div>
+  `;
+
+  return { styles, content };
+}
+
+async function downloadBillingPdf({ fileName, styles, content }) {
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-10000px';
+  container.style.top = '0';
+  container.style.width = '794px';
+  container.style.background = '#ffffff';
+  container.style.zIndex = '-1';
+  container.innerHTML = `<style>${styles}</style>${content}`;
+  document.body.appendChild(container);
+
+  try {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+
+    const root = container.querySelector('.billing-pdf-root');
+    const canvas = await html2canvas(root, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const margin = 10;
+    const renderWidth = pageWidth - margin * 2;
+    const renderHeight = pageHeight - margin * 2;
+    const pxPerMm = canvas.width / renderWidth;
+    const pageCanvasHeight = Math.max(1, Math.floor(renderHeight * pxPerMm));
+
+    let renderedHeight = 0;
+    let pageIndex = 0;
+
+    while (renderedHeight < canvas.height) {
+      const sliceHeight = Math.min(pageCanvasHeight, canvas.height - renderedHeight);
+      const pageCanvas = document.createElement('canvas');
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeight;
+
+      const pageContext = pageCanvas.getContext('2d');
+      pageContext.drawImage(
+        canvas,
+        0,
+        renderedHeight,
+        canvas.width,
+        sliceHeight,
+        0,
+        0,
+        canvas.width,
+        sliceHeight,
+      );
+
+      if (pageIndex > 0) {
+        pdf.addPage();
+      }
+
+      const imageHeight = (sliceHeight * renderWidth) / canvas.width;
+      pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', margin, margin, renderWidth, imageHeight);
+
+      renderedHeight += sliceHeight;
+      pageIndex += 1;
+    }
+
+    pdf.save(fileName);
+  } finally {
+    document.body.removeChild(container);
+  }
+}
+
 async function generatePdf(row, userInfoMap, t) {
   const { symbol } = getCurrencyInfo();
   const month = `${row.year}年${row.month}月`;
 
-  // 用户信息（自己或被 admin 查看的用户）
   let userName = '—', userAccount = '—', companyName = '';
   try {
     const stored = JSON.parse(localStorage.getItem('user') || '{}');
@@ -102,25 +326,24 @@ async function generatePdf(row, userInfoMap, t) {
   let topupRows = [];
   try {
     const mStart = new Date(row.year, row.month - 1, 1).getTime() / 1000;
-    const mEnd   = new Date(row.year, row.month,     1).getTime() / 1000;
-    const uid    = isAdmin() && row.user_id ? row.user_id : null;
-    const url    = uid
+    const mEnd = new Date(row.year, row.month, 1).getTime() / 1000;
+    const uid = isAdmin() && row.user_id ? row.user_id : null;
+    const url = uid
       ? `/api/redemption/?p=1&page_size=500&used_user_id=${uid}`
       : '/api/redemption/self?p=1&page_size=500';
     const res = await API.get(url);
     if (res.data?.success) {
-      const data  = res.data.data;
+      const data = res.data.data;
       const items = Array.isArray(data) ? data : data?.items ?? [];
       topupRows = items.filter(
-        r => r.redeemed_time >= mStart && r.redeemed_time < mEnd
+        (r) => r.redeemed_time >= mStart && r.redeemed_time < mEnd,
       );
     }
   } catch {}
 
   const breakdown = parseBreakdown(row.model_breakdown);
-
   const breakdownRows = breakdown.length
-    ? breakdown.map(r => `<tr>
+    ? breakdown.map((r) => `<tr>
         <td class="model-cell">${r.model || '—'}</td>
         <td class="r">${(r.calls || 0).toLocaleString()}</td>
         <td class="r">${(r.promptTokens || 0).toLocaleString()}</td>
@@ -130,7 +353,7 @@ async function generatePdf(row, userInfoMap, t) {
     : `<tr><td colspan="5" class="empty-row">暂无模型消费明细</td></tr>`;
 
   const topupDetailRows = topupRows.length
-    ? topupRows.map(r => `<tr>
+    ? topupRows.map((r) => `<tr>
         <td class="mono">${new Date(r.redeemed_time * 1000).toLocaleString('zh-CN', { hour12: false })}</td>
         <td class="mono key-col">${maskKey(r.key)}</td>
         <td>${r.name || '—'}</td>
@@ -139,143 +362,23 @@ async function generatePdf(row, userInfoMap, t) {
       </tr>`).join('')
     : `<tr><td colspan="5" class="empty-row">本月暂无充值记录</td></tr>`;
 
-  const html = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8"/>
-<title>月度账单 ${row.year}年${row.month}月-${userAccount}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
-         color: #303133; background: #fff; padding: 48px 56px; font-size: 13px; }
-  .page-header { display: flex; justify-content: space-between; align-items: flex-start;
-                 border-bottom: 2px solid #6366f1; padding-bottom: 20px; margin-bottom: 28px; }
-  .doc-title  { font-size: 22px; font-weight: 700; color: #1a1a2e; }
-  .doc-period { font-size: 13px; color: #6366f1; margin-top: 4px; font-weight: 600; }
-  .meta-area  { text-align: right; line-height: 1.9; color: #606266; }
-  .meta-label { color: #909399; font-size: 11px; }
-  .user-bar { background: #f5f7fa; border-radius: 8px; padding: 14px 20px;
-              display: flex; gap: 40px; margin-bottom: 28px; flex-wrap: wrap; }
-  .uf-label { font-size: 11px; color: #909399; margin-bottom: 2px; }
-  .uf-value { font-size: 13px; font-weight: 600; color: #303133; }
-  .section { margin-bottom: 32px; }
-  .section-title { font-size: 14px; font-weight: 700; color: #303133;
-                   border-left: 3px solid #6366f1; padding-left: 10px; margin-bottom: 14px; }
-  .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-  .summary-card { background: #f5f7fa; border-radius: 8px; padding: 14px 18px; }
-  .sc-label { font-size: 11px; color: #909399; margin-bottom: 6px; }
-  .sc-value { font-size: 20px; font-weight: 700; line-height: 1.2; }
-  .sc-sub   { font-size: 11px; color: #c0c4cc; margin-top: 4px; }
-  .income  { color: #1ac44d; }
-  .expense { color: #f56c6c; }
-  .primary { color: #6366f1; }
-  .muted   { color: #909399; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #f5f7fa; font-weight: 600; color: #606266; font-size: 12px;
-       padding: 9px 12px; text-align: left; border-bottom: 1px solid #ebeef5; }
-  td { padding: 8px 12px; border-bottom: 1px solid #f5f7fa; font-size: 12px; }
-  tr:last-child td { border-bottom: none; }
-  .r { text-align: right; }
-  .center { text-align: center; }
-  .mono { font-family: 'SFMono-Regular', Consolas, monospace; }
-  .key-col { color: #606266; letter-spacing: 0.5px; }
-  .model-cell { color: #5b5bd6; font-weight: 500; }
-  .empty-row { text-align: center; color: #c0c4cc; padding: 20px; }
-  .page-footer { margin-top: 48px; border-top: 1px solid #ebeef5; padding-top: 14px;
-                 text-align: center; font-size: 11px; color: #c0c4cc; }
-  @media print { body { padding: 24px 32px; } }
-</style>
-</head>
-<body>
+  const { styles, content } = buildBillingPdfMarkup({
+    row,
+    userName,
+    userAccount,
+    companyName,
+    symbol,
+    month,
+    topupDetailRows,
+    breakdownRows,
+  });
 
-<div class="page-header">
-  <div>
-    <div class="doc-title">月度账单</div>
-    <div class="doc-period">账单周期：${month}</div>
-  </div>
-  <div class="meta-area">
-    <div><span class="meta-label">生成日期　</span>${new Date(row.generated_at * 1000).toLocaleDateString('zh-CN')}</div>
-    <div><span class="meta-label">生成时间　</span>${new Date(row.generated_at * 1000).toLocaleTimeString('zh-CN', { hour12: false })}</div>
-    <div><span class="meta-label">积分单位　</span>${symbol}</div>
-  </div>
-</div>
-
-<div class="user-bar">
-  <div>
-    <div class="uf-label">用户姓名</div>
-    <div class="uf-value">${userName}</div>
-  </div>
-  <div>
-    <div class="uf-label">账号</div>
-    <div class="uf-value">${userAccount}</div>
-  </div>
-  ${companyName ? `<div><div class="uf-label">企业名称</div><div class="uf-value">${companyName}</div></div>` : ''}
-</div>
-
-<div class="section">
-  <div class="section-title">一、积分摘要</div>
-  <div class="summary-grid">
-    <div class="summary-card">
-      <div class="sc-label">上月结余 (${symbol})</div>
-      <div class="sc-value muted">${qToNum(row.opening_quota)}</div>
-    </div>
-    <div class="summary-card">
-      <div class="sc-label">本月充值 (${symbol})</div>
-      <div class="sc-value income">${row.topup_total > 0 ? '+' + qToNum(row.topup_total) : '—'}</div>
-      ${row.topup_total > 0 ? `<div class="sc-sub">购买 ${qToNum(row.topup_purchase)} · 赠送 ${qToNum(row.topup_gift)}</div>` : ''}
-    </div>
-    <div class="summary-card">
-      <div class="sc-label">本月消费 (${symbol})</div>
-      <div class="sc-value expense">${qToNum(row.used_quota)}</div>
-    </div>
-    <div class="summary-card">
-      <div class="sc-label">本月结余 (${symbol})</div>
-      <div class="sc-value primary">${qToNum(row.closing_quota)}</div>
-    </div>
-  </div>
-</div>
-
-<div class="section">
-  <div class="section-title">二、本月充值明细</div>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:165px">时间</th>
-        <th style="width:150px">兑换码</th>
-        <th>名称</th>
-        <th class="r" style="width:120px">积分 (${symbol})</th>
-        <th class="center" style="width:90px">来源</th>
-      </tr>
-    </thead>
-    <tbody>${topupDetailRows}</tbody>
-  </table>
-</div>
-
-<div class="section">
-  <div class="section-title">三、模型消费明细</div>
-  <table>
-    <thead>
-      <tr>
-        <th>模型</th>
-        <th class="r" style="width:80px">调用次数</th>
-        <th class="r" style="width:110px">输入 tokens</th>
-        <th class="r" style="width:110px">输出 tokens</th>
-        <th class="r" style="width:110px">花费 (${symbol})</th>
-      </tr>
-    </thead>
-    <tbody>${breakdownRows}</tbody>
-  </table>
-</div>
-
-<div class="page-footer">本账单由系统自动生成 · 数据仅供参考，以实际结算为准 · 如有疑问请联系客服</div>
-</body>
-</html>`;
-
-  const win = window.open('', '_blank', 'width=960,height=800');
-  if (!win) { Toast.warning('请允许弹出窗口后重试'); return; }
-  win.document.write(html);
-  win.document.close();
-  win.onload = () => { win.focus(); win.print(); };
+  await downloadBillingPdf({
+    fileName: buildBillingPdfFileName(row, userAccount),
+    styles,
+    content,
+  });
+  Toast.success(t('PDF 已下载'));
 }
 
 // ─── 主组件 ────────────────────────────────────────────────────────────────────
