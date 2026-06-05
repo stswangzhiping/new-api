@@ -14,7 +14,7 @@ import {
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
+import { jsPDF } from 'jspdf/dist/jspdf.es.js';
 import { useTranslation } from 'react-i18next';
 import CardPro from '../../components/common/ui/CardPro';
 import { API, showError } from '../../helpers';
