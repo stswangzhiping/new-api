@@ -45,3 +45,18 @@ export const REDEMPTION_ACTIONS = {
   ENABLE: 'enable',
   DISABLE: 'disable',
 };
+
+// cc_source: source of redemption code (claw-cloud extension)
+export const CC_SOURCE = {
+  UNKNOWN: 0, // 未知
+  ACTIVITY: 1, // 活动赠送
+  PURCHASE: 2, // 用户购买
+  ADJUSTMENT: 3, // 调账（人工账务调整）
+};
+
+export const CC_SOURCE_MAP = {
+  [CC_SOURCE.UNKNOWN]: { color: 'grey', text: '未知' },
+  [CC_SOURCE.ACTIVITY]: { color: 'orange', text: '活动赠送' },
+  [CC_SOURCE.PURCHASE]: { color: 'blue', text: '用户购买' },
+  [CC_SOURCE.ADJUSTMENT]: { color: 'purple', text: '调账' },
+};

@@ -35,6 +35,7 @@ import Channel from './pages/Channel';
 import Token from './pages/Token';
 import Redemption from './pages/Redemption';
 import TopUp from './pages/TopUp';
+import TopupRecord from './pages/TopupRecord';
 import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
@@ -169,6 +170,14 @@ function App() {
             <AdminRoute>
               <User />
             </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/topup-record'
+          element={
+            <PrivateRoute>
+              <TopupRecord />
+            </PrivateRoute>
           }
         />
         <Route

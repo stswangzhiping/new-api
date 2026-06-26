@@ -14,9 +14,40 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// parseOptionalIntFilter parses a query param as int, returns -1 if empty/invalid (meaning no filter).
+func parseOptionalIntFilter(s string) int {
+	if s == "" {
+		return -1
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return -1
+	}
+	return v
+}
+
 func GetAllRedemptions(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	usedUserIdStr := c.Query("used_user_id")
+	if usedUserIdStr != "" {
+		usedUserId, err := strconv.Atoi(usedUserIdStr)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		redemptions, total, err := model.GetRedemptionsByUsedUserId(usedUserId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		pageInfo.SetTotal(int(total))
+		pageInfo.SetItems(redemptions)
+		common.ApiSuccess(c, pageInfo)
+		return
+	}
+	status := parseOptionalIntFilter(c.Query("status"))
+	ccSource := parseOptionalIntFilter(c.Query("cc_source"))
+	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), status, ccSource)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -29,8 +60,10 @@ func GetAllRedemptions(c *gin.Context) {
 
 func SearchRedemptions(c *gin.Context) {
 	keyword := c.Query("keyword")
+	status := parseOptionalIntFilter(c.Query("status"))
+	ccSource := parseOptionalIntFilter(c.Query("cc_source"))
 	pageInfo := common.GetPageQuery(c)
-	redemptions, total, err := model.SearchRedemptions(keyword, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	redemptions, total, err := model.SearchRedemptions(keyword, status, ccSource, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -58,6 +91,21 @@ func GetRedemption(c *gin.Context) {
 		"data":    redemption,
 	})
 	return
+}
+
+// GetSelfRedemptions handles GET /api/redemption/self.
+// Returns the redemption codes that the current user has redeemed.
+func GetSelfRedemptions(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	userId := c.GetInt("id")
+	redemptions, total, err := model.GetRedemptionsByUsedUserId(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(redemptions)
+	common.ApiSuccess(c, pageInfo)
 }
 
 func AddRedemption(c *gin.Context) {
@@ -92,12 +140,16 @@ func AddRedemption(c *gin.Context) {
 	for i := 0; i < redemption.Count; i++ {
 		key := common.GetUUID()
 		cleanRedemption := model.Redemption{
-			UserId:      c.GetInt("id"),
-			Name:        redemption.Name,
-			Key:         key,
-			CreatedTime: common.GetTimestamp(),
-			Quota:       redemption.Quota,
-			ExpiredTime: redemption.ExpiredTime,
+			UserId:       c.GetInt("id"),
+			Name:         redemption.Name,
+			Key:          key,
+			CreatedTime:  common.GetTimestamp(),
+			Quota:        redemption.Quota,
+			ExpiredTime:  redemption.ExpiredTime,
+			CcSource:     redemption.CcSource,
+			CcOrderId:    redemption.CcOrderId,
+			CcRefundable: redemption.CcRefundable,
+			CcRemark:     redemption.CcRemark,
 		}
 		err = cleanRedemption.Insert()
 		if err != nil {
@@ -160,6 +212,10 @@ func UpdateRedemption(c *gin.Context) {
 		cleanRedemption.Name = redemption.Name
 		cleanRedemption.Quota = redemption.Quota
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
+		cleanRedemption.CcSource = redemption.CcSource
+		cleanRedemption.CcOrderId = redemption.CcOrderId
+		cleanRedemption.CcRefundable = redemption.CcRefundable
+		cleanRedemption.CcRemark = redemption.CcRemark
 	}
 	if statusOnly != "" {
 		cleanRedemption.Status = redemption.Status

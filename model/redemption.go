@@ -11,6 +11,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// CcSource constants: source of redemption code.
+const (
+	CcSourceUnknown    = 0 // 未知来源
+	CcSourceActivity   = 1 // 活动赠送（不可退款）
+	CcSourcePurchase   = 2 // 用户购买（可退款）
+	CcSourceAdjustment = 3 // 调账（人工账务调整，不可退款）
+)
+
 type Redemption struct {
 	Id           int            `json:"id"`
 	UserId       int            `json:"user_id"`
@@ -24,10 +32,17 @@ type Redemption struct {
 	UsedUserId   int            `json:"used_user_id"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+	CcSource     int            `json:"cc_source" gorm:"column:cc_source;default:0"`
+	CcOrderId    string         `json:"cc_order_id" gorm:"column:cc_order_id;default:''"`
+	CcRefundable bool           `json:"cc_refundable" gorm:"column:cc_refundable;default:false"`
+	CcRemark     string         `json:"cc_remark" gorm:"column:cc_remark;default:''"`
 }
 
-func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
-	// 开始事务
+func GetAllRedemptions(startIdx int, num int, status int, ccSource int) (redemptions []*Redemption, total int64, err error) {
+	return SearchRedemptions("", status, ccSource, startIdx, num)
+}
+
+func SearchRedemptions(keyword string, status int, ccSource int, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return nil, 0, tx.Error
@@ -38,50 +53,30 @@ func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total 
 		}
 	}()
 
-	// 获取总数
-	err = tx.Model(&Redemption{}).Count(&total).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// 获取分页数据
-	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
-	if err != nil {
-		tx.Rollback()
-		return nil, 0, err
-	}
-
-	// 提交事务
-	if err = tx.Commit().Error; err != nil {
-		return nil, 0, err
-	}
-
-	return redemptions, total, nil
-}
-
-func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
-	tx := DB.Begin()
-	if tx.Error != nil {
-		return nil, 0, tx.Error
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// Build query based on keyword type
 	query := tx.Model(&Redemption{})
 
-	// Only try to convert to ID if the string represents a valid integer
-	if id, err := strconv.Atoi(keyword); err == nil {
-		query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
-	} else {
-		query = query.Where("name LIKE ?", keyword+"%")
+	if keyword != "" {
+		var matchedUserIds []int
+		DB.Model(&User{}).Where("username LIKE ?", "%"+keyword+"%").Pluck("id", &matchedUserIds)
+		if id, convErr := strconv.Atoi(keyword); convErr == nil {
+			if len(matchedUserIds) > 0 {
+				query = query.Where("id = ? OR name LIKE ? OR used_user_id IN ?", id, keyword+"%", matchedUserIds)
+			} else {
+				query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
+			}
+		} else if len(matchedUserIds) > 0 {
+			query = query.Where("name LIKE ? OR used_user_id IN ?", keyword+"%", matchedUserIds)
+		} else {
+			query = query.Where("name LIKE ?", keyword+"%")
+		}
+	}
+	if status >= 0 {
+		query = query.Where("status = ?", status)
+	}
+	if ccSource >= 0 {
+		query = query.Where("cc_source = ?", ccSource)
 	}
 
-	// Get total count
 	err = query.Count(&total).Error
 	if err != nil {
 		tx.Rollback()
@@ -99,6 +94,31 @@ func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Re
 		return nil, 0, err
 	}
 
+	return redemptions, total, nil
+}
+
+func GetRedemptionsByUsedUserId(usedUserId, startIdx, num int) (redemptions []*Redemption, total int64, err error) {
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return nil, 0, tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	q := tx.Model(&Redemption{}).Where("used_user_id = ?", usedUserId)
+	if err = q.Count(&total).Error; err != nil {
+		tx.Rollback()
+		return nil, 0, err
+	}
+	if err = q.Order("redeemed_time desc").Limit(num).Offset(startIdx).Find(&redemptions).Error; err != nil {
+		tx.Rollback()
+		return nil, 0, err
+	}
+	if err = tx.Commit().Error; err != nil {
+		return nil, 0, err
+	}
 	return redemptions, total, nil
 }
 
@@ -151,7 +171,11 @@ func Redeem(key string, userId int) (quota int, err error) {
 		common.SysError("redemption failed: " + err.Error())
 		return 0, ErrRedeemFailed
 	}
-	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
+	keyPrefix := redemption.Key
+	if len(keyPrefix) > 8 {
+		keyPrefix = keyPrefix[:8] + "..."
+	}
+	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d（%s）", logger.LogQuota(redemption.Quota), redemption.Id, keyPrefix))
 	return redemption.Quota, nil
 }
 
@@ -169,7 +193,7 @@ func (redemption *Redemption) SelectUpdate() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (redemption *Redemption) Update() error {
 	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
+	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time", "cc_source", "cc_order_id", "cc_refundable", "cc_remark").Updates(redemption).Error
 	return err
 }
 

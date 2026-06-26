@@ -84,6 +84,7 @@ export default function SettingsSidebarModulesUser() {
         detail: isSidebarModuleAllowed('console', 'detail'),
         token: isSidebarModuleAllowed('console', 'token'),
         log: isSidebarModuleAllowed('console', 'log'),
+        topup_record: isSidebarModuleAllowed('console', 'topup_record'),
         midjourney: isSidebarModuleAllowed('console', 'midjourney'),
         task: isSidebarModuleAllowed('console', 'task'),
       };
@@ -232,12 +233,24 @@ export default function SettingsSidebarModulesUser() {
           console.log('从API加载的用户配置:', userConf);
 
           // 确保用户配置也经过权限过滤
+          const defaultConfig = generateDefaultConfig();
+          const mergedUserConf = {
+            ...defaultConfig,
+            ...userConf,
+          };
+          Object.keys(defaultConfig).forEach((sectionKey) => {
+            mergedUserConf[sectionKey] = {
+              ...defaultConfig[sectionKey],
+              ...userConf[sectionKey],
+            };
+          });
+
           const filteredUserConf = {};
-          Object.keys(userConf).forEach((sectionKey) => {
+          Object.keys(mergedUserConf).forEach((sectionKey) => {
             if (isSidebarSectionAllowed(sectionKey)) {
-              filteredUserConf[sectionKey] = { ...userConf[sectionKey] };
+              filteredUserConf[sectionKey] = { ...mergedUserConf[sectionKey] };
               // 过滤不允许的模块
-              Object.keys(userConf[sectionKey]).forEach((moduleKey) => {
+              Object.keys(mergedUserConf[sectionKey]).forEach((moduleKey) => {
                 if (
                   moduleKey !== 'enabled' &&
                   !isSidebarModuleAllowed(sectionKey, moduleKey)
@@ -311,6 +324,11 @@ export default function SettingsSidebarModulesUser() {
         { key: 'detail', title: t('数据看板'), description: t('系统数据统计') },
         { key: 'token', title: t('令牌管理'), description: t('API令牌管理') },
         { key: 'log', title: t('使用日志'), description: t('API使用记录') },
+        {
+          key: 'topup_record',
+          title: t('充值记录'),
+          description: t('充值日志记录'),
+        },
         {
           key: 'midjourney',
           title: t('绘图日志'),

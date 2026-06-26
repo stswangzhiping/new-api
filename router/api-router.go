@@ -292,15 +292,18 @@ func SetApiRouter(router *gin.Engine) {
 		}
 
 		redemptionRoute := apiRouter.Group("/redemption")
-		redemptionRoute.Use(middleware.AdminAuth())
 		{
-			redemptionRoute.GET("/", controller.GetAllRedemptions)
-			redemptionRoute.GET("/search", controller.SearchRedemptions)
-			redemptionRoute.GET("/:id", controller.GetRedemption)
-			redemptionRoute.POST("/", controller.AddRedemption)
-			redemptionRoute.PUT("/", controller.UpdateRedemption)
-			redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
-			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
+			redemptionRoute.GET("/self", middleware.UserAuth(), controller.GetSelfRedemptions)
+			redemptionRoute.Use(middleware.AdminAuth())
+			{
+				redemptionRoute.GET("/", controller.GetAllRedemptions)
+				redemptionRoute.GET("/search", controller.SearchRedemptions)
+				redemptionRoute.GET("/:id", controller.GetRedemption)
+				redemptionRoute.POST("/", controller.AddRedemption)
+				redemptionRoute.PUT("/", controller.UpdateRedemption)
+				redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
+				redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
+			}
 		}
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
