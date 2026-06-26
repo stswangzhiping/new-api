@@ -530,6 +530,7 @@ func generateDefaultSidebarConfig(userRole int) string {
 		"token":        true,
 		"log":          true,
 		"topup_record": true,
+		"billing":      true,
 		"midjourney":   true,
 		"task":         true,
 	}
@@ -546,21 +547,21 @@ func generateDefaultSidebarConfig(userRole int) string {
 		// 管理员可以访问管理员区域，但不能访问系统设置
 		defaultConfig["admin"] = map[string]interface{}{
 			"enabled":    true,
-			"channel":      true,
-			"models":       true,
+			"channel":    true,
+			"models":     true,
 			"redemption": true,
-			"user":         true,
-			"setting":      false, // 管理员不能访问系统设置
+			"user":       true,
+			"setting":    false, // 管理员不能访问系统设置
 		}
 	} else if userRole == common.RoleRootUser {
 		// 超级管理员可以访问所有功能
 		defaultConfig["admin"] = map[string]interface{}{
 			"enabled":    true,
-			"channel":      true,
-			"models":       true,
+			"channel":    true,
+			"models":     true,
 			"redemption": true,
-			"user":         true,
-			"setting":      true,
+			"user":       true,
+			"setting":    true,
 		}
 	}
 	// 普通用户不包含admin区域
