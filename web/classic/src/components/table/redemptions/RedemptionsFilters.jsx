@@ -20,6 +20,12 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useRef } from 'react';
 import { Form, Button } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
+import {
+  REDEMPTION_STATUS,
+  REDEMPTION_STATUS_MAP,
+  CC_SOURCE,
+  CC_SOURCE_MAP,
+} from '../../../constants/redemption.constants';
 
 const RedemptionsFilters = ({
   formInitValues,
@@ -29,7 +35,6 @@ const RedemptionsFilters = ({
   searching,
   t,
 }) => {
-  // Handle form reset and immediate search
   const formApiRef = useRef(null);
 
   const handleReset = () => {
@@ -39,6 +44,30 @@ const RedemptionsFilters = ({
       searchRedemptions();
     }, 100);
   };
+
+  const statusOptions = [
+    { value: '', label: t('全部状态') },
+    {
+      value: REDEMPTION_STATUS.UNUSED,
+      label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.UNUSED].text),
+    },
+    {
+      value: REDEMPTION_STATUS.USED,
+      label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.USED].text),
+    },
+    {
+      value: REDEMPTION_STATUS.DISABLED,
+      label: t(REDEMPTION_STATUS_MAP[REDEMPTION_STATUS.DISABLED].text),
+    },
+  ];
+
+  const sourceOptions = [
+    { value: '', label: t('全部来源') },
+    { value: CC_SOURCE.UNKNOWN, label: t(CC_SOURCE_MAP[CC_SOURCE.UNKNOWN].text) },
+    { value: CC_SOURCE.ACTIVITY, label: t(CC_SOURCE_MAP[CC_SOURCE.ACTIVITY].text) },
+    { value: CC_SOURCE.PURCHASE, label: t(CC_SOURCE_MAP[CC_SOURCE.PURCHASE].text) },
+    { value: CC_SOURCE.ADJUSTMENT, label: t(CC_SOURCE_MAP[CC_SOURCE.ADJUSTMENT].text) },
+  ];
 
   return (
     <Form
@@ -56,6 +85,26 @@ const RedemptionsFilters = ({
       className='w-full md:w-auto order-1 md:order-2'
     >
       <div className='flex flex-col md:flex-row items-center gap-2 w-full md:w-auto'>
+        <Form.Select
+          field='status'
+          placeholder={t('全部状态')}
+          style={{ width: '100%', minWidth: 112 }}
+          size='small'
+          pure
+          optionList={statusOptions}
+          onChange={() => setTimeout(() => searchRedemptions(), 50)}
+          className='md:!w-28'
+        />
+        <Form.Select
+          field='cc_source'
+          placeholder={t('全部来源')}
+          style={{ width: '100%', minWidth: 112 }}
+          size='small'
+          pure
+          optionList={sourceOptions}
+          onChange={() => setTimeout(() => searchRedemptions(), 50)}
+          className='md:!w-28'
+        />
         <div className='relative w-full md:w-64'>
           <Form.Input
             field='searchKeyword'

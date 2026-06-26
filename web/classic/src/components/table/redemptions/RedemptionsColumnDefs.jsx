@@ -25,6 +25,7 @@ import {
   REDEMPTION_STATUS,
   REDEMPTION_STATUS_MAP,
   REDEMPTION_ACTIONS,
+  CC_SOURCE_MAP,
 } from '../../../constants/redemption.constants';
 
 /**
@@ -86,6 +87,7 @@ export const getRedemptionsColumns = ({
   redemptions,
   activePage,
   showDeleteRedemptionModal,
+  usernameMap = {},
 }) => {
   return [
     {
@@ -132,10 +134,46 @@ export const getRedemptionsColumns = ({
       },
     },
     {
-      title: t('兑换人ID'),
+      title: t('兑换人'),
       dataIndex: 'used_user_id',
       render: (text) => {
-        return <div>{text === 0 ? t('无') : text}</div>;
+        if (!text || text === 0) return <div>{t('无')}</div>;
+        return <div>{usernameMap[text] || String(text)}</div>;
+      },
+    },
+    {
+      title: t('来源'),
+      dataIndex: 'cc_source',
+      render: (text) => {
+        const sourceConfig = CC_SOURCE_MAP[text ?? 0] || CC_SOURCE_MAP[0];
+        return (
+          <Tag color={sourceConfig.color} shape='circle'>
+            {t(sourceConfig.text)}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t('可退款'),
+      dataIndex: 'cc_refundable',
+      render: (text) => {
+        return text ? (
+          <Tag color='green' shape='circle'>
+            {t('是')}
+          </Tag>
+        ) : (
+          <Tag color='grey' shape='circle'>
+            {t('否')}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t('创建者'),
+      dataIndex: 'user_id',
+      render: (text) => {
+        if (!text || text === 0) return <div>{t('无')}</div>;
+        return <div>{usernameMap[text] || String(text)}</div>;
       },
     },
     {

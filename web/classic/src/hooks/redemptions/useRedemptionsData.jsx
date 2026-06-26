@@ -55,6 +55,8 @@ export const useRedemptionsData = () => {
   // Form state
   const formInitValues = {
     searchKeyword: '',
+    status: '',
+    cc_source: '',
   };
 
   // Get form values
@@ -62,6 +64,8 @@ export const useRedemptionsData = () => {
     const formValues = formApi ? formApi.getValues() : {};
     return {
       searchKeyword: formValues.searchKeyword || '',
+      status: formValues.status ?? '',
+      cc_source: formValues.cc_source ?? '',
     };
   };
 
@@ -70,19 +74,36 @@ export const useRedemptionsData = () => {
     setRedemptions(redemptions);
   };
 
+  // Build API URL with current keyword and filters
+  const buildQueryUrl = (page, ps) => {
+    const { searchKeyword, status, cc_source } = getFormValues();
+    const keyword = searchKeyword || '';
+    const hasKeyword = keyword !== '';
+
+    let url = hasKeyword
+      ? `/api/redemption/search?keyword=${encodeURIComponent(keyword)}&p=${page}&page_size=${ps}`
+      : `/api/redemption/?p=${page}&page_size=${ps}`;
+
+    if (status !== '') {
+      url += `&status=${status}`;
+    }
+    if (cc_source !== '') {
+      url += `&cc_source=${cc_source}`;
+    }
+
+    return url;
+  };
+
   // Load redemption list
-  const loadRedemptions = async (page = 1, pageSize) => {
+  const loadRedemptions = async (page = 1, ps = pageSize) => {
     setLoading(true);
     try {
-      const res = await API.get(
-        `/api/redemption/?p=${page}&page_size=${pageSize}`,
-      );
+      const res = await API.get(buildQueryUrl(page, ps));
       const { success, message, data } = res.data;
       if (success) {
-        const newPageData = data.items;
         setActivePage(data.page <= 0 ? 1 : data.page);
         setTokenCount(data.total);
-        setRedemptionFormat(newPageData);
+        setRedemptionFormat(data.items);
       } else {
         showError(message);
       }
@@ -94,23 +115,14 @@ export const useRedemptionsData = () => {
 
   // Search redemption codes
   const searchRedemptions = async () => {
-    const { searchKeyword } = getFormValues();
-    if (searchKeyword === '') {
-      await loadRedemptions(1, pageSize);
-      return;
-    }
-
     setSearching(true);
     try {
-      const res = await API.get(
-        `/api/redemption/search?keyword=${searchKeyword}&p=1&page_size=${pageSize}`,
-      );
+      const res = await API.get(buildQueryUrl(1, pageSize));
       const { success, message, data } = res.data;
       if (success) {
-        const newPageData = data.items;
         setActivePage(data.page || 1);
         setTokenCount(data.total);
-        setRedemptionFormat(newPageData);
+        setRedemptionFormat(data.items);
       } else {
         showError(message);
       }
@@ -163,35 +175,20 @@ export const useRedemptionsData = () => {
 
   // Refresh data
   const refresh = async (page = activePage) => {
-    const { searchKeyword } = getFormValues();
-    if (searchKeyword === '') {
-      await loadRedemptions(page, pageSize);
-    } else {
-      await searchRedemptions();
-    }
+    await loadRedemptions(page, pageSize);
   };
 
   // Handle page change
   const handlePageChange = (page) => {
     setActivePage(page);
-    const { searchKeyword } = getFormValues();
-    if (searchKeyword === '') {
-      loadRedemptions(page, pageSize);
-    } else {
-      searchRedemptions();
-    }
+    loadRedemptions(page, pageSize);
   };
 
   // Handle page size change
   const handlePageSizeChange = (size) => {
     setPageSize(size);
     setActivePage(1);
-    const { searchKeyword } = getFormValues();
-    if (searchKeyword === '') {
-      loadRedemptions(1, size);
-    } else {
-      searchRedemptions();
-    }
+    loadRedemptions(1, size);
   };
 
   // Row selection configuration

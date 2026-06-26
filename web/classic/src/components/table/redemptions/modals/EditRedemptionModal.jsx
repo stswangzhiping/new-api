@@ -22,14 +22,15 @@ import { useTranslation } from 'react-i18next';
 import {
   API,
   downloadTextAsFile,
+  getCurrencyConfig,
   showError,
   showSuccess,
   renderQuota,
-  getCurrencyConfig,
 } from '../../../../helpers';
 import {
-  quotaToDisplayAmount,
   displayAmountToQuota,
+  getQuotaPerUnit,
+  quotaToDisplayAmount,
 } from '../../../../helpers/quota';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 import {
@@ -45,16 +46,73 @@ import {
   Avatar,
   Row,
   Col,
-  InputNumber,
 } from '@douyinfe/semi-ui';
 import {
   IconCreditCard,
   IconSave,
   IconClose,
   IconGift,
+  IconInfoCircle,
 } from '@douyinfe/semi-icons';
+import { CC_SOURCE } from '../../../../constants/redemption.constants';
 
 const { Text, Title } = Typography;
+
+// Convert raw quota ↔ human-readable display amount (handles negative for ADJUSTMENT)
+const rawToDisplay = (rawQuota) => {
+  if (!rawQuota) return 0;
+  const { type } = getCurrencyConfig();
+  if (type === 'TOKENS') return rawQuota;
+  const sign = rawQuota < 0 ? -1 : 1;
+  const abs = Math.abs(rawQuota);
+  const usd = abs / getQuotaPerUnit();
+  const { rate } = getCurrencyConfig();
+  const display = type === 'USD' ? usd : usd * (rate || 1);
+  return sign * display;
+};
+
+const displayToRaw = (displayVal) => {
+  const val = parseFloat(displayVal) || 0;
+  if (val === 0) return 0;
+  const { type } = getCurrencyConfig();
+  if (type === 'TOKENS') return Math.round(val);
+  const sign = val < 0 ? -1 : 1;
+  const abs = Math.abs(val);
+  const { rate } = getCurrencyConfig();
+  const usd = type === 'USD' ? abs : abs / (rate || 1);
+  return sign * Math.round(usd * getQuotaPerUnit());
+};
+
+const getRedemptionPresetOptions = () => {
+  const { type } = getCurrencyConfig();
+
+  if (type === 'TOKENS') {
+    // For TOKENS mode keep original raw values
+    return [100000, 500000, 1000000, 5000000, 10000000].map((quota) => ({
+      value: quota,
+      label: renderQuota(quota),
+    }));
+  }
+
+  // For USD/CUSTOM mode: value = display amount (credits or USD), label = formatted string
+  return [1, 10, 50, 100, 500, 1000]
+    .map((amount) => {
+      const quota = displayAmountToQuota(amount);
+      if (!Number.isFinite(quota) || quota <= 0) return null;
+      return {
+        value: amount,
+        label: renderQuota(quota),
+      };
+    })
+    .filter(Boolean);
+};
+
+const getDefaultQuotaValue = () => {
+  const { type } = getCurrencyConfig();
+  if (type === 'TOKENS') return Math.max(1, Math.round(getQuotaPerUnit()));
+  // Default: 100 display units (100 credits / $100)
+  return 100;
+};
 
 const EditRedemptionModal = (props) => {
   const { t } = useTranslation();
@@ -62,14 +120,17 @@ const EditRedemptionModal = (props) => {
   const [loading, setLoading] = useState(isEdit);
   const isMobile = useIsMobile();
   const formApiRef = useRef(null);
-  const [showQuotaInput, setShowQuotaInput] = useState(false);
+  const quotaPresetOptions = getRedemptionPresetOptions();
 
   const getInitValues = () => ({
     name: '',
-    quota: 100000,
-    amount: Number(quotaToDisplayAmount(100000).toFixed(6)),
+    quota: getDefaultQuotaValue(),
     count: 1,
     expired_time: null,
+    cc_source: CC_SOURCE.UNKNOWN,
+    cc_order_id: '',
+    cc_refundable: false,
+    cc_remark: '',
   });
 
   const handleCancel = () => {
@@ -86,7 +147,11 @@ const EditRedemptionModal = (props) => {
       } else {
         data.expired_time = new Date(data.expired_time * 1000);
       }
-      data.amount = Number(quotaToDisplayAmount(data.quota || 0).toFixed(6));
+      // Convert raw quota to human-readable display amount for the form
+      if (data.quota != null) {
+        const display = rawToDisplay(data.quota);
+        data.quota = display !== 0 ? display : data.quota;
+      }
       formApiRef.current?.setValues({ ...getInitValues(), ...data });
     } else {
       showError(message);
@@ -112,13 +177,13 @@ const EditRedemptionModal = (props) => {
     setLoading(true);
     let localInputs = { ...values };
     localInputs.count = parseInt(localInputs.count) || 0;
-    localInputs.quota = displayAmountToQuota(localInputs.amount);
-    if (localInputs.quota <= 0) {
-      showError(t('请输入金额'));
-      setLoading(false);
-      return;
-    }
+    // Convert display amount back to raw quota for submission
+    localInputs.quota = displayToRaw(localInputs.quota);
     localInputs.name = name;
+    localInputs.cc_source = parseInt(localInputs.cc_source) || CC_SOURCE.UNKNOWN;
+    localInputs.cc_order_id = localInputs.cc_order_id || '';
+    localInputs.cc_refundable = !!localInputs.cc_refundable;
+    localInputs.cc_remark = localInputs.cc_remark || '';
     if (!localInputs.expired_time) {
       localInputs.expired_time = 0;
     } else {
@@ -277,7 +342,7 @@ const EditRedemptionModal = (props) => {
                   </Row>
                 </Card>
 
-                <Card className='!rounded-2xl shadow-sm border-0'>
+                <Card className='!rounded-2xl shadow-sm border-0 mb-6'>
                   {/* Header: Quota Settings */}
                   <div className='flex items-center mb-2'>
                     <Avatar
@@ -298,63 +363,44 @@ const EditRedemptionModal = (props) => {
                   </div>
 
                   <Row gutter={12}>
-                    <Col span={24}>
-                      <Form.InputNumber
-                        field='amount'
-                        label={t('金额')}
-                        prefix={getCurrencyConfig().symbol}
-                        placeholder={t('输入金额')}
-                        precision={6}
-                        min={0}
-                        step={0.000001}
+                    <Col span={12}>
+                      <Form.AutoComplete
+                        field='quota'
+                        label={t('额度 (✦)')}
+                        placeholder={
+                          values.cc_source === CC_SOURCE.ADJUSTMENT
+                            ? t('正数充值，负数扣减')
+                            : t('请输入额度')
+                        }
                         style={{ width: '100%' }}
-                        onChange={(val) => {
-                          const amount = val === '' || val == null ? 0 : val;
-                          formApiRef.current?.setValue('amount', amount);
-                          formApiRef.current?.setValue(
-                            'quota',
-                            displayAmountToQuota(amount),
-                          );
-                        }}
+                        type='number'
+                        rules={[
+                          { required: true, message: t('请输入额度') },
+                          {
+                            validator: (rule, v) => {
+                              const num = parseInt(v, 10);
+                              if (values.cc_source === CC_SOURCE.ADJUSTMENT) {
+                                return Number.isFinite(num) && num !== 0
+                                  ? Promise.resolve()
+                                  : Promise.reject(t('调账额度不能为0'));
+                              }
+                              return num > 0
+                                ? Promise.resolve()
+                                : Promise.reject(t('额度必须大于0'));
+                            },
+                          },
+                        ]}
+                        extraText={(() => {
+                          const displayVal = Number(values.quota) || 0;
+                          if (displayVal === 0) return '';
+                          // displayVal is already in display units; convert to raw quota then to USD
+                          const rawQ = displayToRaw(displayVal);
+                          const usd = (Math.abs(rawQ) / getQuotaPerUnit()).toFixed(2);
+                          return t('等价金额：') + (rawQ < 0 ? '-$' : '$') + usd;
+                        })()}
+                        data={quotaPresetOptions}
                         showClear
                       />
-                      <div
-                        className='text-xs cursor-pointer mt-1'
-                        style={{ color: 'var(--semi-color-text-2)' }}
-                        onClick={() => setShowQuotaInput((v) => !v)}
-                      >
-                        {showQuotaInput
-                          ? `▾ ${t('收起原生额度输入')}`
-                          : `▸ ${t('使用原生额度输入')}`}
-                      </div>
-                      <div style={{ display: showQuotaInput ? 'block' : 'none' }} className='mt-2'>
-                        <Form.InputNumber
-                          field='quota'
-                          label={t('额度')}
-                          placeholder={t('输入额度')}
-                          rules={[
-                            { required: true, message: t('请输入额度') },
-                            {
-                              validator: (rule, v) => {
-                                const num = parseInt(v, 10);
-                                return num > 0
-                                  ? Promise.resolve()
-                                  : Promise.reject(t('额度必须大于0'));
-                              },
-                            },
-                          ]}
-                          onChange={(val) => {
-                            const quota = val === '' || val == null ? 0 : val;
-                            formApiRef.current?.setValue('quota', quota);
-                            formApiRef.current?.setValue(
-                              'amount',
-                              Number(quotaToDisplayAmount(quota).toFixed(6)),
-                            );
-                          }}
-                          style={{ width: '100%' }}
-                          showClear
-                        />
-                      </div>
                     </Col>
                     {!isEdit && (
                       <Col span={12}>
@@ -378,6 +424,78 @@ const EditRedemptionModal = (props) => {
                         />
                       </Col>
                     )}
+                  </Row>
+                </Card>
+
+                <Card className='!rounded-2xl shadow-sm border-0'>
+                  {/* Header: Source Info */}
+                  <div className='flex items-center mb-2'>
+                    <Avatar
+                      size='small'
+                      color='orange'
+                      className='mr-2 shadow-md'
+                    >
+                      <IconInfoCircle size={16} />
+                    </Avatar>
+                    <div>
+                      <Text className='text-lg font-medium'>
+                        {t('来源信息')}
+                      </Text>
+                      <div className='text-xs text-gray-600'>
+                        {t('记录兑换码来源，用于退款判断')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Row gutter={12}>
+                    <Col span={12}>
+                      <Form.Select
+                        field='cc_source'
+                        label={t('来源')}
+                        style={{ width: '100%' }}
+                        optionList={[
+                          { value: CC_SOURCE.UNKNOWN,    label: t('未知') },
+                          { value: CC_SOURCE.ACTIVITY,   label: t('活动赠送') },
+                          { value: CC_SOURCE.PURCHASE,   label: t('用户购买') },
+                          { value: CC_SOURCE.ADJUSTMENT, label: t('调账') },
+                        ]}
+                        onChange={(val) => {
+                          if (val === CC_SOURCE.PURCHASE) {
+                            formApiRef.current?.setValue('cc_refundable', true);
+                          } else if (val === CC_SOURCE.ACTIVITY || val === CC_SOURCE.ADJUSTMENT) {
+                            formApiRef.current?.setValue('cc_refundable', false);
+                          }
+                        }}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Form.Switch
+                        field='cc_refundable'
+                        label={t('可退款')}
+                        extraText={t('用户购买默认可退，赠送/调账默认不可退')}
+                      />
+                    </Col>
+                    {values.cc_source === CC_SOURCE.PURCHASE && (
+                      <Col span={24}>
+                        <Form.Input
+                          field='cc_order_id'
+                          label={t('订单号')}
+                          placeholder={t('请输入关联订单号（选填）')}
+                          style={{ width: '100%' }}
+                          showClear
+                        />
+                      </Col>
+                    )}
+                    <Col span={24}>
+                      <Form.TextArea
+                        field='cc_remark'
+                        label={t('备注')}
+                        placeholder={t('请输入备注说明（选填）')}
+                        style={{ width: '100%' }}
+                        rows={2}
+                        showClear
+                      />
+                    </Col>
                   </Row>
                 </Card>
               </div>
