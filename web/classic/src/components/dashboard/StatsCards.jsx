@@ -98,7 +98,7 @@ const StatsCards = ({
                       <div className='w-24 h-10'>
                         <VChart
                           spec={getTrendSpec(item.trendData, item.trendColor)}
-                          options={CHART_CONFIG}
+                          option={CHART_CONFIG}
                         />
                       </div>
                     )
