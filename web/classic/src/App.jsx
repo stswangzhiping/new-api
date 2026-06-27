@@ -36,7 +36,6 @@ import Token from './pages/Token';
 import Redemption from './pages/Redemption';
 import TopUp from './pages/TopUp';
 import TopupRecord from './pages/TopupRecord';
-import Billing from './pages/Billing';
 import Log from './pages/Log';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
@@ -178,14 +177,6 @@ function App() {
           element={
             <PrivateRoute>
               <TopupRecord />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path='/console/billing'
-          element={
-            <PrivateRoute>
-              <Billing />
             </PrivateRoute>
           }
         />

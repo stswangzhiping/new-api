@@ -85,7 +85,6 @@ export default function SettingsSidebarModulesUser() {
         token: isSidebarModuleAllowed('console', 'token'),
         log: isSidebarModuleAllowed('console', 'log'),
         topup_record: isSidebarModuleAllowed('console', 'topup_record'),
-        billing: isSidebarModuleAllowed('console', 'billing'),
         midjourney: isSidebarModuleAllowed('console', 'midjourney'),
         task: isSidebarModuleAllowed('console', 'task'),
       };
@@ -329,11 +328,6 @@ export default function SettingsSidebarModulesUser() {
           key: 'topup_record',
           title: t('充值记录'),
           description: t('充值日志记录'),
-        },
-        {
-          key: 'billing',
-          title: t('账单'),
-          description: t('月度账单记录'),
         },
         {
           key: 'midjourney',
