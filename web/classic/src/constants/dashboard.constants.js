@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 // ========== UI 配置常量 ==========
-export const CHART_CONFIG = {};
+export const CHART_CONFIG = { mode: 'desktop-browser' };
 
 export const CARD_PROPS = {
   shadows: '',
