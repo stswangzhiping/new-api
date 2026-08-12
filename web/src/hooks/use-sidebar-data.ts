@@ -27,6 +27,7 @@ import {
   ListTodo,
   MessageSquare,
   Radio,
+  ReceiptText,
   ServerCog,
   Settings,
   Ticket,
@@ -107,6 +108,16 @@ export function useSidebarData(): SidebarData {
             title: t('Wallet'),
             url: '/wallet',
             icon: Wallet,
+          },
+          {
+            title: t('Top-up History'),
+            url: '/topup-history',
+            icon: ReceiptText,
+          },
+          {
+            title: t('Billing'),
+            url: '/billing',
+            icon: FileText,
           },
           {
             title: t('Profile'),
