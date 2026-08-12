@@ -17,8 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Loader2, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { register, wechatLoginByCode } from '@/features/auth/api'
+import { getCaptcha, register, wechatLoginByCode } from '@/features/auth/api'
 import { LegalConsent } from '@/features/auth/components/legal-consent'
 import { OAuthProviders } from '@/features/auth/components/oauth-providers'
 import { registerFormSchema } from '@/features/auth/constants'
@@ -66,6 +66,10 @@ export function SignUpForm({
   const [isWeChatDialogOpen, setIsWeChatDialogOpen] = useState(false)
   const [isWeChatSubmitting, setIsWeChatSubmitting] = useState(false)
   const [turnstileWidgetKey, setTurnstileWidgetKey] = useState(0)
+  const [captchaId, setCaptchaId] = useState('')
+  const [captchaImg, setCaptchaImg] = useState('')
+  const [captchaAnswer, setCaptchaAnswer] = useState('')
+  const [isCaptchaLoading, setIsCaptchaLoading] = useState(false)
   const legalConsentErrorMessage = t('Please agree to the legal terms first')
 
   const { status } = useStatus()
@@ -107,7 +111,28 @@ export function SignUpForm({
     status?.data?.oauth_register_enabled ??
     true
   const hasWeChatLogin = Boolean(status?.wechat_login)
+  const statusReady = Boolean(status)
   const turnstileReady = !isTurnstileEnabled || Boolean(turnstileToken)
+  const imageCaptchaEnabled = statusReady && !isTurnstileEnabled
+
+  const refreshCaptcha = useCallback(async () => {
+    if (!imageCaptchaEnabled) return
+    setIsCaptchaLoading(true)
+    try {
+      const res = await getCaptcha()
+      if (res?.success && res.data) {
+        setCaptchaId(res.data.captcha_id)
+        setCaptchaImg(res.data.captcha_img)
+        setCaptchaAnswer('')
+      } else {
+        toast.error(res?.message || t('Failed to load captcha'))
+      }
+    } catch {
+      toast.error(t('Failed to load captcha'))
+    } finally {
+      setIsCaptchaLoading(false)
+    }
+  }, [imageCaptchaEnabled, t])
 
   const wechatQrCodeUrl = useMemo(() => {
     return (
@@ -138,7 +163,19 @@ export function SignUpForm({
     }
   }, [])
 
+  useEffect(() => {
+    if (imageCaptchaEnabled) {
+      void refreshCaptcha()
+    } else {
+      setCaptchaId('')
+      setCaptchaImg('')
+      setCaptchaAnswer('')
+    }
+  }, [imageCaptchaEnabled, refreshCaptcha])
+
   async function onSubmit(data: z.infer<typeof registerFormSchema>) {
+    if (!statusReady) return
+
     if (requiresLegalConsent && !agreedToLegal) {
       toast.error(legalConsentErrorMessage)
       return
@@ -157,6 +194,10 @@ export function SignUpForm({
     }
 
     if (!validateTurnstile()) return
+    if (imageCaptchaEnabled && (!captchaId || !captchaAnswer.trim())) {
+      toast.error(t('Please enter the image captcha'))
+      return
+    }
 
     setIsLoading(true)
     try {
@@ -167,6 +208,8 @@ export function SignUpForm({
         verification_code: verificationCode || undefined,
         aff_code: getAffiliateCode(),
         turnstile: turnstileToken,
+        captcha_id: captchaId || undefined,
+        captcha_answer: captchaAnswer.trim() || undefined,
       })
 
       if (res?.success) {
@@ -177,6 +220,9 @@ export function SignUpForm({
       }
     } catch {
       // Errors are handled by global interceptor
+      if (imageCaptchaEnabled) {
+        void refreshCaptcha()
+      }
     } finally {
       setIsLoading(false)
     }
@@ -357,6 +403,50 @@ export function SignUpForm({
           </div>
         )}
 
+        {imageCaptchaEnabled && (
+          <div className='grid gap-2'>
+            <Label htmlFor='captcha-answer'>{t('Image captcha')}</Label>
+            <div className='flex gap-2'>
+              <Input
+                id='captcha-answer'
+                placeholder={t('Please enter the image captcha')}
+                value={captchaAnswer}
+                onChange={(event) => setCaptchaAnswer(event.target.value)}
+                autoComplete='off'
+              />
+              <Button
+                type='button'
+                variant='outline'
+                className='h-10 px-2'
+                disabled={isCaptchaLoading}
+                onClick={() => void refreshCaptcha()}
+                aria-label={t('Refresh captcha')}
+              >
+                {isCaptchaLoading ? (
+                  <Loader2 className='h-4 w-4 animate-spin' />
+                ) : (
+                  <RefreshCw className='h-4 w-4' />
+                )}
+              </Button>
+            </div>
+            {captchaImg && (
+              <button
+                type='button'
+                className='w-fit rounded-md border bg-background p-1'
+                onClick={() => void refreshCaptcha()}
+                disabled={isCaptchaLoading}
+                aria-label={t('Refresh captcha')}
+              >
+                <img
+                  src={captchaImg}
+                  alt={t('Image captcha')}
+                  className='h-10 w-32 object-contain'
+                />
+              </button>
+            )}
+          </div>
+        )}
+
         <LegalConsent
           status={status}
           checked={agreedToLegal}
@@ -370,8 +460,10 @@ export function SignUpForm({
           className='mt-2 w-full justify-center gap-2'
           disabled={
             isLoading ||
+            !statusReady ||
             (requiresLegalConsent && !agreedToLegal) ||
-            !turnstileReady
+            !turnstileReady ||
+            (imageCaptchaEnabled && (!captchaId || !captchaAnswer.trim()))
           }
         >
           {isLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : null}
