@@ -75,6 +75,27 @@ export const STATIC_I18N_KEYS = [
   'All Tags',
   'More...',
   'Less',
+  'Image captcha',
+  'Please enter the image captcha',
+  'Refresh captcha',
+  'Failed to load captcha',
+  'Activity Gift',
+  'Adjustment',
+  'Adjustment quota cannot be zero',
+  'User Purchase',
+  'Refundable',
+  'Creator',
+  'Order ID',
+  'Select source',
+  'Enter order ID',
+  'Enter remark',
+  'Whether this redemption code can be refunded',
+  'Positive adds quota, negative deducts quota',
+  'Opening quota',
+  'Closing quota',
+  'Generated at',
+  'No model details',
+  'No billing records found',
 
   // Roles
   'Super Admin',
@@ -141,6 +162,24 @@ export const STATIC_I18N_KEYS = [
   'Expired time cannot be earlier than current time',
   'Quota must be a positive number',
   'Successfully created {{count}} redemption codes',
+
+  // Top-up history
+  'Top-up History',
+  'Used quota',
+  'Total quota',
+  'Purchase',
+  'Gift',
+  'System gift',
+  'No top-up records found',
+  'Your top-up history will appear here.',
+
+  // Usage logs export
+  'Export CSV',
+  'CSV exported',
+  'CSV export failed',
+  'Use Time',
+  'First Response Time',
+  'Cache Tokens',
 
   // Home page (constants-driven labels)
   'Cost Tracking',
