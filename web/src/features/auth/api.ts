@@ -36,6 +36,7 @@ import type {
   Login2FAResponse,
   TwoFAPayload,
   RegisterPayload,
+  CaptchaResponseData,
   ApiResponse,
 } from './types'
 
@@ -246,7 +247,18 @@ export async function telegramLogin(
 // User registration
 export async function register(payload: RegisterPayload): Promise<ApiResponse> {
   const res = await api.post(`/api/user/register`, payload, {
-    params: { turnstile: payload.turnstile ?? '' },
+    params: {
+      turnstile: payload.turnstile ?? '',
+      captcha_id: payload.captcha_id ?? '',
+      captcha_answer: payload.captcha_answer ?? '',
+    },
+  })
+  return res.data
+}
+
+export async function getCaptcha(): Promise<ApiResponse<CaptchaResponseData>> {
+  const res = await api.get('/api/captcha', {
+    skipAuthRefresh: true,
   })
   return res.data
 }
