@@ -35,6 +35,7 @@ import { getRedemptions, searchRedemptions } from '../api'
 import {
   ERROR_MESSAGES,
   REDEMPTION_STATUS,
+  getRedemptionSourceOptions,
   getRedemptionStatusOptions,
 } from '../constants'
 import { isRedemptionExpired } from '../lib'
@@ -72,12 +73,20 @@ export function RedemptionsTable() {
     navigate: route.useNavigate(),
     pagination: { defaultPage: 1, defaultPageSize: isMobile ? 10 : 20 },
     globalFilter: { enabled: true, key: 'filter' },
-    columnFilters: [{ columnId: 'status', searchKey: 'status', type: 'array' }],
+    columnFilters: [
+      { columnId: 'status', searchKey: 'status', type: 'array' },
+      { columnId: 'cc_source', searchKey: 'source', type: 'array' },
+    ],
   })
+  const sourceFilter =
+    (columnFilters.find((filter) => filter.id === 'cc_source')?.value as
+      | string[]
+      | undefined) ?? []
   const statusFilter =
     (columnFilters.find((filter) => filter.id === 'status')?.value as
       | string[]
       | undefined) ?? []
+  const sourceFilterValue = sourceFilter[0] ?? ''
   const statusFilterValue = statusFilter[0] ?? ''
 
   // Fetch data with React Query
@@ -88,22 +97,25 @@ export function RedemptionsTable() {
       pagination.pageSize,
       globalFilter,
       statusFilterValue,
+      sourceFilterValue,
       refreshTrigger,
     ],
     queryFn: async () => {
       const hasFilter = globalFilter?.trim()
       const hasStatusFilter = statusFilterValue !== ''
+      const hasSourceFilter = sourceFilterValue !== ''
       const params = {
         p: pagination.pageIndex + 1,
         page_size: pagination.pageSize,
+        status: statusFilterValue,
+        cc_source: sourceFilterValue,
       }
 
       const result =
-        hasFilter || hasStatusFilter
+        hasFilter || hasStatusFilter || hasSourceFilter
           ? await searchRedemptions({
               ...params,
               keyword: globalFilter,
-              status: statusFilterValue,
             })
           : await getRedemptions(params)
 
@@ -111,7 +123,7 @@ export function RedemptionsTable() {
         toast.error(
           result.message ||
             t(
-              hasFilter || hasStatusFilter
+              hasFilter || hasStatusFilter || hasSourceFilter
                 ? ERROR_MESSAGES.SEARCH_FAILED
                 : ERROR_MESSAGES.LOAD_FAILED
             )
@@ -156,6 +168,10 @@ export function RedemptionsTable() {
     () => getRedemptionStatusOptions(t),
     [t]
   )
+  const redemptionSourceOptions = useMemo(
+    () => getRedemptionSourceOptions(t),
+    [t]
+  )
 
   return (
     <DataTablePage
@@ -176,6 +192,12 @@ export function RedemptionsTable() {
             columnId: 'status',
             title: t('Status'),
             options: redemptionStatusOptions,
+            singleSelect: true,
+          },
+          {
+            columnId: 'cc_source',
+            title: t('Source'),
+            options: redemptionSourceOptions,
             singleSelect: true,
           },
         ],

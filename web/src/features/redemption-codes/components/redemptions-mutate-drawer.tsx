@@ -31,6 +31,7 @@ import {
   sideDrawerHeaderClassName,
 } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -42,6 +43,14 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Sheet,
   SheetClose,
   SheetContent,
@@ -50,6 +59,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Textarea } from '@/components/ui/textarea'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import {
   formatQuota,
@@ -60,7 +70,11 @@ import { handleServerError } from '@/lib/handle-server-error'
 import { addTimeToDate } from '@/lib/time'
 
 import { createRedemption, updateRedemption, getRedemption } from '../api'
-import { SUCCESS_MESSAGES } from '../constants'
+import {
+  REDEMPTION_SOURCE,
+  SUCCESS_MESSAGES,
+  getRedemptionSourceOptions,
+} from '../constants'
 import {
   getRedemptionFormSchema,
   type RedemptionFormValues,
@@ -221,9 +235,16 @@ export function RedemptionsMutateDrawer({
   const tokensOnly = currencyMeta.kind === 'tokens'
   const quotaStep = getEditableQuotaStep()
   const quotaLabel = t('Quota ({{currency}})', { currency: currencyLabel })
+  const sourceOptions = getRedemptionSourceOptions(t)
+  const selectedSource = form.watch('cc_source')
+  const isAdjustment = selectedSource === REDEMPTION_SOURCE.ADJUSTMENT
   const quotaPlaceholder = tokensOnly
-    ? t('Enter quota in tokens')
-    : t('Enter quota in {{currency}}', { currency: currencyLabel })
+    ? isAdjustment
+      ? t('Positive adds quota, negative deducts quota')
+      : t('Enter quota in tokens')
+    : isAdjustment
+      ? t('Positive adds quota, negative deducts quota')
+      : t('Enter quota in {{currency}}', { currency: currencyLabel })
   let submitButtonLabel = t('Save changes')
   if (isLoadingRedemption) {
     submitButtonLabel = t('Loading...')
@@ -306,11 +327,13 @@ export function RedemptionsMutateDrawer({
                         />
                       </FormControl>
                       <FormDescription>
-                        {tokensOnly
-                          ? t('Enter the quota amount in tokens')
-                          : t('Enter the quota amount in {{currency}}', {
-                              currency: currencyLabel,
-                            })}
+                        {isAdjustment
+                          ? t('Positive adds quota, negative deducts quota')
+                          : tokensOnly
+                            ? t('Enter the quota amount in tokens')
+                            : t('Enter the quota amount in {{currency}}', {
+                                currency: currencyLabel,
+                              })}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -369,6 +392,105 @@ export function RedemptionsMutateDrawer({
                       <FormDescription>
                         {t('Leave empty for never expires')}
                       </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='cc_source'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Source')}</FormLabel>
+                      <Select
+                        value={String(field.value)}
+                        onValueChange={(value) => {
+                          const source = Number(value)
+                          field.onChange(source)
+                          if (source === REDEMPTION_SOURCE.PURCHASE) {
+                            form.setValue('cc_refundable', true)
+                          } else if (
+                            source === REDEMPTION_SOURCE.ACTIVITY ||
+                            source === REDEMPTION_SOURCE.ADJUSTMENT
+                          ) {
+                            form.setValue('cc_refundable', false)
+                          }
+                        }}
+                      >
+                        <SelectTrigger className='w-full'>
+                          <SelectValue placeholder={t('Select source')} />
+                        </SelectTrigger>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            {sourceOptions.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='cc_refundable'
+                  render={({ field }) => (
+                    <FormItem className='flex flex-row items-center gap-3 rounded-md border p-3'>
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) =>
+                            field.onChange(Boolean(checked))
+                          }
+                        />
+                      </FormControl>
+                      <div className='space-y-1 leading-none'>
+                        <FormLabel>{t('Refundable')}</FormLabel>
+                        <FormDescription>
+                          {t('Whether this redemption code can be refunded')}
+                        </FormDescription>
+                      </div>
+                    </FormItem>
+                  )}
+                />
+
+                {selectedSource === REDEMPTION_SOURCE.PURCHASE && (
+                  <FormField
+                    control={form.control}
+                    name='cc_order_id'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Order ID')}</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder={t('Enter order ID')} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <FormField
+                  control={form.control}
+                  name='cc_remark'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Remark')}</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          placeholder={t('Enter remark')}
+                          rows={3}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}

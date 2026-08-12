@@ -33,6 +33,10 @@ export const redemptionSchema = z.object({
   redeemed_time: z.number(),
   expired_time: z.number(), // 0 for never expires
   used_user_id: z.number(),
+  cc_source: z.number().optional(),
+  cc_order_id: z.string().optional(),
+  cc_refundable: z.boolean().optional(),
+  cc_remark: z.string().optional(),
 })
 
 export type Redemption = z.infer<typeof redemptionSchema>
@@ -50,6 +54,8 @@ export interface ApiResponse<T = unknown> {
 export interface GetRedemptionsParams {
   p?: number
   page_size?: number
+  status?: string
+  cc_source?: string
 }
 
 export interface GetRedemptionsResponse {
@@ -66,6 +72,7 @@ export interface GetRedemptionsResponse {
 export interface SearchRedemptionsParams {
   keyword?: string
   status?: string
+  cc_source?: string
   p?: number
   page_size?: number
 }
@@ -75,6 +82,10 @@ export interface RedemptionFormData {
   name: string
   quota: number
   expired_time: number
+  cc_source?: number
+  cc_order_id?: string
+  cc_refundable?: boolean
+  cc_remark?: string
   count?: number // Only for create
   status?: number // Only for status update
 }

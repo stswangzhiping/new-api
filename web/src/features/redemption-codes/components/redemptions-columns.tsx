@@ -30,7 +30,11 @@ import {
 } from '@/components/ui/tooltip'
 import { formatQuota, formatTimestampToDate } from '@/lib/format'
 
-import { REDEMPTION_FILTER_EXPIRED, REDEMPTION_STATUSES } from '../constants'
+import {
+  REDEMPTION_FILTER_EXPIRED,
+  REDEMPTION_SOURCES,
+  REDEMPTION_STATUSES,
+} from '../constants'
 import { isRedemptionExpired, isTimestampExpired } from '../lib'
 import { type Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
@@ -171,6 +175,41 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
       size: 120,
     },
     {
+      accessorKey: 'cc_source',
+      header: t('Source'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const source = Number(row.original.cc_source ?? 0)
+        const sourceConfig = REDEMPTION_SOURCES[source] ?? REDEMPTION_SOURCES[0]
+        return (
+          <StatusBadge
+            label={t(sourceConfig.labelKey)}
+            variant={sourceConfig.variant}
+            copyable={false}
+            className='-ml-1.5'
+          />
+        )
+      },
+      size: 130,
+    },
+    {
+      accessorKey: 'cc_refundable',
+      header: t('Refundable'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const refundable = Boolean(row.original.cc_refundable)
+        return (
+          <StatusBadge
+            label={refundable ? t('Yes') : t('No')}
+            variant={refundable ? 'success' : 'neutral'}
+            copyable={false}
+            className='-ml-1.5'
+          />
+        )
+      },
+      size: 120,
+    },
+    {
       accessorKey: 'created_time',
       header: t('Created'),
       meta: { mobileHidden: true },
@@ -209,6 +248,26 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
         )
       },
       size: 180,
+    },
+    {
+      accessorKey: 'user_id',
+      header: t('Creator'),
+      meta: { mobileHidden: true },
+      cell: ({ row }) => {
+        const userId = row.getValue('user_id') as number
+        if (userId === 0) {
+          return <span className='text-muted-foreground text-sm'>-</span>
+        }
+        return (
+          <StatusBadge
+            label={t('User {{id}}', { id: userId })}
+            variant='neutral'
+            copyable={false}
+            className='-ml-1.5'
+          />
+        )
+      },
+      size: 120,
     },
     {
       accessorKey: 'used_user_id',

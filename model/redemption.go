@@ -11,6 +11,13 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	CcSourceUnknown    = 0
+	CcSourceActivity   = 1
+	CcSourcePurchase   = 2
+	CcSourceAdjustment = 3
+)
+
 type Redemption struct {
 	Id           int            `json:"id"`
 	UserId       int            `json:"user_id"`
@@ -22,11 +29,15 @@ type Redemption struct {
 	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
 	Count        int            `json:"count" gorm:"-:all"` // only for api request
 	UsedUserId   int            `json:"used_user_id"`
+	CcSource     int            `json:"cc_source" gorm:"column:cc_source;default:0"`
+	CcOrderId    string         `json:"cc_order_id" gorm:"column:cc_order_id;default:''"`
+	CcRefundable bool           `json:"cc_refundable" gorm:"column:cc_refundable;default:false"`
+	CcRemark     string         `json:"cc_remark" gorm:"column:cc_remark;default:''"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
 }
 
-func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
+func GetAllRedemptions(startIdx int, num int, status string, ccSource string) (redemptions []*Redemption, total int64, err error) {
 	// 开始事务
 	tx := DB.Begin()
 	if tx.Error != nil {
@@ -39,14 +50,22 @@ func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total 
 	}()
 
 	// 获取总数
-	err = tx.Model(&Redemption{}).Count(&total).Error
+	query := tx.Model(&Redemption{})
+	if status != "" {
+		query = applyRedemptionStatusFilter(query, status)
+	}
+	if ccSource != "" {
+		query = query.Where("cc_source = ?", ccSource)
+	}
+
+	err = query.Count(&total).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
 	}
 
 	// 获取分页数据
-	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
+	err = query.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
@@ -60,7 +79,7 @@ func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total 
 	return redemptions, total, nil
 }
 
-func SearchRedemptions(keyword string, status string, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
+func SearchRedemptions(keyword string, status string, ccSource string, startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
 	tx := DB.Begin()
 	if tx.Error != nil {
 		return nil, 0, tx.Error
@@ -74,33 +93,26 @@ func SearchRedemptions(keyword string, status string, startIdx int, num int) (re
 	query := tx.Model(&Redemption{})
 
 	if keyword != "" {
+		var matchedUserIds []int
+		DB.Model(&User{}).Where("username LIKE ?", "%"+keyword+"%").Pluck("id", &matchedUserIds)
 		if id, err := strconv.Atoi(keyword); err == nil {
-			query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
+			if len(matchedUserIds) > 0 {
+				query = query.Where("id = ? OR name LIKE ? OR used_user_id IN ?", id, keyword+"%", matchedUserIds)
+			} else {
+				query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
+			}
+		} else if len(matchedUserIds) > 0 {
+			query = query.Where("name LIKE ? OR used_user_id IN ?", keyword+"%", matchedUserIds)
 		} else {
 			query = query.Where("name LIKE ?", keyword+"%")
 		}
 	}
 
 	if status != "" {
-		now := common.GetTimestamp()
-		switch status {
-		case "expired":
-			query = query.Where(
-				"status = ? AND expired_time != 0 AND expired_time < ?",
-				common.RedemptionCodeStatusEnabled,
-				now,
-			)
-		case strconv.Itoa(common.RedemptionCodeStatusEnabled):
-			query = query.Where(
-				"status = ? AND (expired_time = 0 OR expired_time >= ?)",
-				common.RedemptionCodeStatusEnabled,
-				now,
-			)
-		case strconv.Itoa(common.RedemptionCodeStatusDisabled):
-			query = query.Where("status = ?", common.RedemptionCodeStatusDisabled)
-		case strconv.Itoa(common.RedemptionCodeStatusUsed):
-			query = query.Where("status = ?", common.RedemptionCodeStatusUsed)
-		}
+		query = applyRedemptionStatusFilter(query, status)
+	}
+	if ccSource != "" {
+		query = query.Where("cc_source = ?", ccSource)
 	}
 
 	// Get total count
@@ -117,6 +129,57 @@ func SearchRedemptions(keyword string, status string, startIdx int, num int) (re
 		return nil, 0, err
 	}
 
+	if err = tx.Commit().Error; err != nil {
+		return nil, 0, err
+	}
+
+	return redemptions, total, nil
+}
+
+func applyRedemptionStatusFilter(query *gorm.DB, status string) *gorm.DB {
+	now := common.GetTimestamp()
+	switch status {
+	case "expired":
+		return query.Where(
+			"status = ? AND expired_time != 0 AND expired_time < ?",
+			common.RedemptionCodeStatusEnabled,
+			now,
+		)
+	case strconv.Itoa(common.RedemptionCodeStatusEnabled):
+		return query.Where(
+			"status = ? AND (expired_time = 0 OR expired_time >= ?)",
+			common.RedemptionCodeStatusEnabled,
+			now,
+		)
+	case strconv.Itoa(common.RedemptionCodeStatusDisabled):
+		return query.Where("status = ?", common.RedemptionCodeStatusDisabled)
+	case strconv.Itoa(common.RedemptionCodeStatusUsed):
+		return query.Where("status = ?", common.RedemptionCodeStatusUsed)
+	default:
+		return query
+	}
+}
+
+func GetRedemptionsByUsedUserId(usedUserId, startIdx, num int) (redemptions []*Redemption, total int64, err error) {
+	tx := DB.Begin()
+	if tx.Error != nil {
+		return nil, 0, tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	query := tx.Model(&Redemption{}).Where("used_user_id = ?", usedUserId)
+	if err = query.Count(&total).Error; err != nil {
+		tx.Rollback()
+		return nil, 0, err
+	}
+	if err = query.Order("redeemed_time desc").Limit(num).Offset(startIdx).Find(&redemptions).Error; err != nil {
+		tx.Rollback()
+		return nil, 0, err
+	}
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
 	}
@@ -199,7 +262,7 @@ func (redemption *Redemption) SelectUpdate() error {
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (redemption *Redemption) Update() error {
 	var err error
-	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
+	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time", "cc_source", "cc_order_id", "cc_refundable", "cc_remark").Updates(redemption).Error
 	return err
 }
 
