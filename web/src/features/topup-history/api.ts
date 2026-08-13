@@ -24,6 +24,7 @@ import type {
   RedemptionRecord,
   TopupGiftLog,
   UserSelf,
+  UserSummary,
 } from './types'
 
 export async function getSelfRedemptions(page = 1, pageSize = 500) {
@@ -42,8 +43,38 @@ export async function getSelfTopupGiftLogs(pageSize = 200) {
     type: '4',
     page_size: String(pageSize),
   })
-  const res = await api.get<ApiResponse<PageInfo<TopupGiftLog> | TopupGiftLog[]>>(
-    `/api/log/self?${params.toString()}`
+  const res = await api.get<
+    ApiResponse<PageInfo<TopupGiftLog> | TopupGiftLog[]>
+  >(`/api/log/self?${params.toString()}`)
+  return res.data
+}
+
+export async function getAdminRedemptions(page = 1, pageSize = 500) {
+  const params = new URLSearchParams({
+    p: String(page),
+    page_size: String(pageSize),
+  })
+  const res = await api.get<ApiResponse<PageInfo<RedemptionRecord>>>(
+    `/api/redemption/?${params.toString()}`
+  )
+  return res.data
+}
+
+export async function getAdminTopupGiftLogs(pageSize = 500) {
+  const params = new URLSearchParams({
+    type: '4',
+    page_size: String(pageSize),
+  })
+  const res = await api.get<
+    ApiResponse<PageInfo<TopupGiftLog> | TopupGiftLog[]>
+  >(`/api/log/?${params.toString()}`)
+  return res.data
+}
+
+export async function getAdminUsers(pageSize = 500) {
+  const params = new URLSearchParams({ p: '1', page_size: String(pageSize) })
+  const res = await api.get<ApiResponse<PageInfo<UserSummary> | UserSummary[]>>(
+    `/api/user/?${params.toString()}`
   )
   return res.data
 }

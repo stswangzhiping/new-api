@@ -31,6 +31,12 @@ export interface UserSelf {
   quota?: number
 }
 
+export interface UserSummary {
+  id: number
+  username?: string
+  display_name?: string
+}
+
 export interface RedemptionRecord {
   id: number
   user_id: number
