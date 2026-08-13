@@ -94,7 +94,7 @@ export type RedemptionFormValues = {
 
 export const REDEMPTION_FORM_DEFAULT_VALUES: RedemptionFormValues = {
   name: '',
-  quota_dollars: 10,
+  quota_dollars: 100,
   expired_time: undefined,
   cc_source: REDEMPTION_SOURCE.UNKNOWN,
   cc_order_id: '',

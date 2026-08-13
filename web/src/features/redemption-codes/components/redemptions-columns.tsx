@@ -39,7 +39,9 @@ import { isRedemptionExpired, isTimestampExpired } from '../lib'
 import { type Redemption } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
-export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
+export function useRedemptionsColumns(
+  usernameMap: Record<number, string> = {}
+): ColumnDef<Redemption>[] {
   const { t } = useTranslation()
   return [
     {
@@ -260,7 +262,7 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
         }
         return (
           <StatusBadge
-            label={t('User {{id}}', { id: userId })}
+            label={usernameMap[userId] || String(userId)}
             variant='neutral'
             copyable={false}
             className='-ml-1.5'
@@ -286,7 +288,7 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
             <TooltipTrigger
               render={
                 <StatusBadge
-                  label={t('User {{id}}', { id: userId })}
+                  label={usernameMap[userId] || String(userId)}
                   variant='neutral'
                   copyable={false}
                   className='cursor-help'

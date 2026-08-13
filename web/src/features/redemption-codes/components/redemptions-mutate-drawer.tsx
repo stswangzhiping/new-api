@@ -91,6 +91,9 @@ type RedemptionsMutateDrawerProps = {
   currentRow?: Redemption
 }
 
+const DISPLAY_QUOTA_PRESETS = [1, 10, 50, 100, 500, 1000]
+const TOKEN_QUOTA_PRESETS = [100000, 500000, 1000000, 5000000, 10000000]
+
 export function RedemptionsMutateDrawer({
   open,
   onOpenChange,
@@ -230,14 +233,20 @@ export function RedemptionsMutateDrawer({
     form.setValue('expired_time', newDate)
   }
 
-  const { meta: currencyMeta } = getCurrencyDisplay()
+  const { config: currencyConfig, meta: currencyMeta } = getCurrencyDisplay()
   const currencyLabel = getCurrencyLabel()
   const tokensOnly = currencyMeta.kind === 'tokens'
   const quotaStep = getEditableQuotaStep()
   const quotaLabel = t('Quota ({{currency}})', { currency: currencyLabel })
   const sourceOptions = getRedemptionSourceOptions(t)
   const selectedSource = form.watch('cc_source')
+  const selectedQuota = form.watch('quota_dollars')
   const isAdjustment = selectedSource === REDEMPTION_SOURCE.ADJUSTMENT
+  const quotaPresets = tokensOnly
+    ? TOKEN_QUOTA_PRESETS
+    : DISPLAY_QUOTA_PRESETS
+  const rawQuota = parseQuotaFromDollars(selectedQuota)
+  const equivalentUsd = Math.abs(rawQuota) / currencyConfig.quotaPerUnit
   const quotaPlaceholder = tokensOnly
     ? isAdjustment
       ? t('Positive adds quota, negative deducts quota')
@@ -326,14 +335,30 @@ export function RedemptionsMutateDrawer({
                           }
                         />
                       </FormControl>
+                      <div className='grid grid-cols-3 gap-2 sm:grid-cols-6'>
+                        {quotaPresets.map((amount) => (
+                          <Button
+                            key={amount}
+                            type='button'
+                            size='sm'
+                            variant={field.value === amount ? 'default' : 'outline'}
+                            onClick={() =>
+                              form.setValue('quota_dollars', amount, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                          >
+                            {amount}
+                          </Button>
+                        ))}
+                      </div>
                       <FormDescription>
-                        {isAdjustment
-                          ? t('Positive adds quota, negative deducts quota')
-                          : tokensOnly
-                            ? t('Enter the quota amount in tokens')
-                            : t('Enter the quota amount in {{currency}}', {
-                                currency: currencyLabel,
-                              })}
+                        {!tokensOnly && rawQuota !== 0
+                          ? `${t('Equivalent amount:')} ${rawQuota < 0 ? '-' : ''}$${equivalentUsd.toFixed(2)}`
+                          : isAdjustment
+                            ? t('Positive adds quota, negative deducts quota')
+                            : t('Enter the quota amount in tokens')}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
