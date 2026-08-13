@@ -416,16 +416,21 @@ export function CommonLogsFilterBar<TData>(
         <TooltipTrigger
           render={
             <Button
-              variant='ghost'
-              size='icon'
+              variant='outline'
+              size='sm'
               onClick={handleExportCsv}
               disabled={exporting}
               aria-label={t('Export CSV')}
-              className='text-muted-foreground hover:text-foreground size-7'
+              className='gap-1.5'
             />
           }
         >
-          {exporting ? <Loader2 className='animate-spin' /> : <Download />}
+          {exporting ? (
+            <Loader2 className='size-4 animate-spin' />
+          ) : (
+            <Download className='size-4' />
+          )}
+          <span>{t('Export CSV')}</span>
         </TooltipTrigger>
         <TooltipContent>{t('Export CSV')}</TooltipContent>
       </Tooltip>
