@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"gorm.io/gorm/clause"
 )
 
 type CcBilling struct {
@@ -72,11 +71,8 @@ func ComputeAndSaveBillingForMonthForce(userId int, year, month int) error {
 
 func computeAndSaveBillingForMonth(userId int, year, month int, forceSave bool) error {
 	exists, err := CcBillingExistsByUserMonth(userId, year, month)
-	if err != nil {
+	if err != nil || exists {
 		return err
-	}
-	if exists && !forceSave {
-		return nil
 	}
 
 	loc := time.FixedZone("CST", 8*3600)
@@ -185,26 +181,6 @@ func computeAndSaveBillingForMonth(userId int, year, month int, forceSave bool) 
 		UsedQuota:      lastMonthConsume.Total,
 		ModelBreakdown: string(breakdownJSON),
 		GeneratedAt:    common.GetTimestamp(),
-	}
-
-	if forceSave {
-		return DB.Clauses(clause.OnConflict{
-			Columns: []clause.Column{
-				{Name: "user_id"},
-				{Name: "year"},
-				{Name: "month"},
-			},
-			DoUpdates: clause.AssignmentColumns([]string{
-				"opening_quota",
-				"closing_quota",
-				"topup_total",
-				"topup_purchase",
-				"topup_gift",
-				"used_quota",
-				"model_breakdown",
-				"generated_at",
-			}),
-		}).Create(billing).Error
 	}
 
 	return SaveCcBilling(billing)

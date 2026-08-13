@@ -31,3 +31,18 @@ export interface ModelBreakdownItem {
   completionTokens: number
   quota: number
 }
+
+export interface BillingUser {
+  id: number
+  username?: string
+  display_name?: string
+}
+
+export interface BillingRedemption {
+  id: number
+  key: string
+  name: string
+  quota: number
+  redeemed_time: number
+  cc_source?: number
+}

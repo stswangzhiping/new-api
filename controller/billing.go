@@ -139,6 +139,16 @@ func GetAdminBilling(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if userId > 0 && total == 0 {
+		if err = ensureBillingHistory(userId, true); err != nil {
+			common.SysLog("billing force generate warn: " + err.Error())
+		}
+		billings, total, err = model.GetAllCcBillingsForAdmin(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(billings)
 	common.ApiSuccess(c, pageInfo)
