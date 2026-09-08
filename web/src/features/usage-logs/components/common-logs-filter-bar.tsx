@@ -143,6 +143,16 @@ function getCacheReadTokens(log: UsageLog) {
   return Number(other?.cache_tokens) || 0
 }
 
+function getCacheWriteTokens(log: UsageLog) {
+  const other = parseLogOther(log.other)
+  const cacheWrite5m = Number(other?.cache_creation_tokens_5m) || 0
+  const cacheWrite1h = Number(other?.cache_creation_tokens_1h) || 0
+
+  return cacheWrite5m > 0 || cacheWrite1h > 0
+    ? cacheWrite5m + cacheWrite1h
+    : Number(other?.cache_creation_tokens) || 0
+}
+
 function downloadCsv(filename: string, rows: unknown[][]) {
   const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n')
   const blob = new Blob([`\uFEFF${csv}`], {
@@ -356,9 +366,10 @@ export function CommonLogsFilterBar<TData>(
         t('Model Name'),
         t('Use Time'),
         t('First Response Time'),
-        t('Prompt Tokens'),
-        t('Cache Tokens'),
-        t('Completion Tokens'),
+        t('Input'),
+        t('Usage CSV Cache Read'),
+        t('Usage CSV Cache Write'),
+        t('Output'),
         t('Quota'),
         'IP',
         t('Details'),
@@ -374,6 +385,7 @@ export function CommonLogsFilterBar<TData>(
         getFirstTokenSeconds(log),
         log.prompt_tokens || '',
         getCacheReadTokens(log) || '',
+        getCacheWriteTokens(log) || '',
         log.completion_tokens || '',
         log.quota || '',
         log.ip || '',

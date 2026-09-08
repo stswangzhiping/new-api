@@ -919,6 +919,8 @@
     "Cache Tokens": "Cache Tokens",
     "CSV export failed": "CSV export failed",
     "CSV exported": "CSV exported",
+    "Usage CSV Cache Read": "Cache Read",
+    "Usage CSV Cache Write": "Cache Write",
     "Cache read price": "Cache read price",
     "Cache repeated prompt prefixes for cheaper, faster reuse": "Cache repeated prompt prefixes for cheaper, faster reuse",
     "Cache write": "Cache write",

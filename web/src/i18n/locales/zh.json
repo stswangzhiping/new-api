@@ -919,6 +919,8 @@
     "Cache Tokens": "缓存 Tokens",
     "CSV export failed": "CSV 导出失败",
     "CSV exported": "CSV 已导出",
+    "Usage CSV Cache Read": "缓存读",
+    "Usage CSV Cache Write": "缓存写",
     "Cache read price": "缓存读取价格",
     "Cache repeated prompt prefixes for cheaper, faster reuse": "缓存重复的提示词前缀，复用更快、更省钱",
     "Cache write": "缓存写入",
