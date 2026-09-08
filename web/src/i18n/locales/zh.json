@@ -1113,6 +1113,8 @@
     "Copy token": "复制令牌",
     "CSV export failed": "CSV 导出失败",
     "CSV exported": "CSV 已导出",
+    "Usage CSV Cache Read": "缓存读",
+    "Usage CSV Cache Write": "缓存写",
     "Copy URL": "复制 URL",
     "Copying...": "正在复制...",
     "Copywriting, ad creative, SEO": "文案、广告创意、SEO",
