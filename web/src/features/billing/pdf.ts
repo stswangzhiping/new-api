@@ -153,6 +153,68 @@ const PDF_STYLES = `<style>
   footer { margin-top: 30px; border-top: 1px solid #ebeef5; padding-top: 10px; color: #c0c4cc; text-align: center; }
 </style>`
 
+const PDF_CANVAS_SAFE_STYLES = `
+  .billing-document,
+  .billing-document * {
+    color: #303133 !important;
+    border-color: #ebeef5 !important;
+    outline-color: transparent !important;
+    text-decoration-color: currentColor !important;
+    box-shadow: none !important;
+  }
+
+  .billing-document {
+    background: #ffffff !important;
+  }
+
+  .billing-document header {
+    border-bottom-color: #6366f1 !important;
+  }
+
+  .billing-document h1 {
+    color: #1a1a2e !important;
+  }
+
+  .billing-document h2 {
+    border-left-color: #6366f1 !important;
+  }
+
+  .billing-document .period,
+  .billing-document .primary {
+    color: #6366f1 !important;
+  }
+
+  .billing-document .generated {
+    color: #606266 !important;
+  }
+
+  .billing-document .user-bar,
+  .billing-document .summary > div,
+  .billing-document th {
+    background: #f5f7fa !important;
+  }
+
+  .billing-document .user-bar span,
+  .billing-document .summary span,
+  .billing-document .summary small,
+  .billing-document .empty {
+    color: #909399 !important;
+  }
+
+  .billing-document .income {
+    color: #16a34a !important;
+  }
+
+  .billing-document .expense {
+    color: #dc2626 !important;
+  }
+
+  .billing-document footer {
+    color: #c0c4cc !important;
+    border-top-color: #ebeef5 !important;
+  }
+`
+
 export async function downloadBillingPdf(options: {
   record: BillingRecord
   user: BillingUser
@@ -174,6 +236,11 @@ export async function downloadBillingPdf(options: {
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
+      onclone: (clonedDocument) => {
+        const style = clonedDocument.createElement('style')
+        style.textContent = PDF_CANVAS_SAFE_STYLES
+        clonedDocument.head.appendChild(style)
+      },
     })
     const pdf = new jsPDF('p', 'mm', 'a4')
     const pageWidth = 210
