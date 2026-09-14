@@ -19,10 +19,9 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQueryClient, useIsFetching, useQuery } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import type { Table } from '@tanstack/react-table'
-import { Download, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Download, Eye, EyeOff } from 'lucide-react'
 import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -47,13 +46,9 @@ import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
-import { parseLogOther } from '../lib/format'
 import {
-  fetchLogsByCategory,
   getDefaultTimeRange,
-  getLogTypeConfig,
 } from '../lib/utils'
-import type { UsageLog } from '../data/schema'
 import type { CommonLogFilters } from '../types'
 import { CommonLogsStats } from './common-logs-stats'
 import { CompactDateTimeRangePicker } from './compact-date-time-range-picker'
@@ -118,63 +113,6 @@ function buildSearchSourceKey(values: {
     .join('\u001f')
 }
 
-function csvEscape(value: unknown) {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`
-}
-
-function formatCsvTimestamp(ts?: number) {
-  if (!ts) return ''
-  return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false })
-}
-
-function getCsvLogTypeLabel(type: number, t: (key: string) => string) {
-  return t(getLogTypeConfig(type).label)
-}
-
-function getFirstTokenSeconds(log: UsageLog) {
-  if (!log.is_stream) return ''
-  const other = parseLogOther(log.other)
-  const frt = Number(other?.frt)
-  return Number.isFinite(frt) ? (frt / 1000).toFixed(3) : ''
-}
-
-function getCacheReadTokens(log: UsageLog) {
-  const other = parseLogOther(log.other)
-  return Number(other?.cache_tokens) || 0
-}
-
-function getCacheWriteTokens(log: UsageLog) {
-  const other = parseLogOther(log.other)
-  const cacheWrite5m = Number(other?.cache_creation_tokens_5m) || 0
-  const cacheWrite1h = Number(other?.cache_creation_tokens_1h) || 0
-
-  return cacheWrite5m > 0 || cacheWrite1h > 0
-    ? cacheWrite5m + cacheWrite1h
-    : Number(other?.cache_creation_tokens) || 0
-}
-
-function downloadCsv(filename: string, rows: unknown[][]) {
-  const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n')
-  const blob = new Blob([`\uFEFF${csv}`], {
-    type: 'text/csv;charset=utf-8;',
-  })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-function getExportDate() {
-  const d = new Date()
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-')
-}
-
 interface CommonLogsFilterBarProps<TData> {
   table: Table<TData>
 }
@@ -190,7 +128,6 @@ export function CommonLogsFilterBar<TData>(
   const { isAdminView: isAdmin } = useLogsViewScope()
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
-  const [exporting, setExporting] = useState(false)
   const { data: adminGroups } = useQuery({
     queryKey: ['groups'],
     queryFn: async () => requireServerSuccess(await getGroups()),
@@ -319,87 +256,31 @@ export function CommonLogsFilterBar<TData>(
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
   }, [navigate, queryClient])
 
-  const handleExportCsv = useCallback(async () => {
-    if (exporting) return
-
-    setExporting(true)
-    try {
-      const exportPageSize = 500
-      const allLogs: UsageLog[] = []
-      let page = 1
-      let total = 0
-      const exportSearchParams = {
-        ...buildSearchParams(filters, 'common'),
-        type: [logType],
-      }
-
-      while (true) {
-        const result = await fetchLogsByCategory({
-          logCategory: 'common',
-          isAdmin,
-          page,
-          pageSize: exportPageSize,
-          searchParams: exportSearchParams,
-          columnFilters: [],
-        })
-        if (!result?.success) {
-          throw new Error(result?.message || t('Failed to load logs'))
-        }
-        const items = (result.data?.items || []) as UsageLog[]
-        total = result.data?.total || 0
-        allLogs.push(...items)
-        if (!items.length || allLogs.length >= total) break
-        page += 1
-      }
-
-      if (allLogs.length === 0) {
-        toast.error(t('No data available'))
-        return
-      }
-
-      const headers = [
-        t('Time'),
-        ...(isAdmin ? [t('Username')] : []),
-        t('Token Name'),
-        t('Group'),
-        t('Type'),
-        t('Model Name'),
-        t('Use Time'),
-        t('First Response Time'),
-        t('Input'),
-        t('Usage CSV Cache Read'),
-        t('Usage CSV Cache Write'),
-        t('Output'),
-        t('Quota'),
-        'IP',
-        t('Details'),
-      ]
-      const rows = allLogs.map((log) => [
-        formatCsvTimestamp(log.created_at),
-        ...(isAdmin ? [log.username || ''] : []),
-        log.token_name || '',
-        log.group || '',
-        getCsvLogTypeLabel(log.type, t),
-        log.model_name || '',
-        log.type === 2 || log.type === 5 ? log.use_time || '' : '',
-        getFirstTokenSeconds(log),
-        log.prompt_tokens || '',
-        getCacheReadTokens(log) || '',
-        getCacheWriteTokens(log) || '',
-        log.completion_tokens || '',
-        log.quota || '',
-        log.ip || '',
-        log.content || '',
-      ])
-
-      downloadCsv(`usage-logs-${getExportDate()}.csv`, [headers, ...rows])
-      toast.success(t('CSV exported'))
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('CSV export failed'))
-    } finally {
-      setExporting(false)
+  const handleExportCsv = useCallback(() => {
+    const exportSearchParams = {
+      ...buildSearchParams(filters, 'common'),
+      type: [logType],
     }
-  }, [exporting, filters, isAdmin, logType, t])
+    const params = new URLSearchParams()
+    Object.entries(exportSearchParams).forEach(([key, value]) => {
+      if (value === undefined || value === null) return
+      const mappedKey =
+        key === 'startTime' ? 'start_timestamp' :
+        key === 'endTime' ? 'end_timestamp' :
+        key === 'model' ? 'model_name' :
+        key === 'token' ? 'token_name' :
+        key === 'requestId' ? 'request_id' :
+        key === 'upstreamRequestId' ? 'upstream_request_id' : key
+      const rawValue = Array.isArray(value) ? value[0] : value
+      const exportValue =
+        mappedKey === 'start_timestamp' || mappedKey === 'end_timestamp'
+          ? String(Math.floor(Number(rawValue) / 1000))
+          : String(rawValue)
+      params.set(mappedKey, exportValue)
+    })
+    const endpoint = isAdmin ? '/api/log/export' : '/api/log/self/export'
+    window.location.assign(`${endpoint}?${params.toString()}`)
+  }, [filters, isAdmin, logType])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -453,17 +334,12 @@ export function CommonLogsFilterBar<TData>(
               variant='outline'
               size='sm'
               onClick={handleExportCsv}
-              disabled={exporting}
               aria-label={t('Export CSV')}
               className='gap-1.5'
             />
           }
         >
-          {exporting ? (
-            <Loader2 className='size-4 animate-spin' />
-          ) : (
-            <Download className='size-4' />
-          )}
+          <Download className='size-4' />
           <span>{t('Export CSV')}</span>
         </TooltipTrigger>
         <TooltipContent>{t('Export CSV')}</TooltipContent>
