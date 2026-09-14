@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQueryClient, useIsFetching, useQuery } from '@tanstack/react-query'
 import { useNavigate, getRouteApi } from '@tanstack/react-router'
 import type { Table } from '@tanstack/react-table'
-import { Download, Eye, EyeOff } from 'lucide-react'
+import { Download, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -41,14 +41,12 @@ import {
 } from '@/components/ui/tooltip'
 import { getGroups } from '@/features/users/api'
 import { useMediaQuery } from '@/hooks'
-import { getUserGroups } from '@/lib/api'
+import { api, getUserGroups } from '@/lib/api'
 import { requireServerSuccess } from '@/lib/server-error-message'
 
 import { LOG_TYPE_ALL_VALUE, LOG_TYPE_FILTERS } from '../constants'
 import { buildSearchParams } from '../lib/filter'
-import {
-  getDefaultTimeRange,
-} from '../lib/utils'
+import { getDefaultTimeRange } from '../lib/utils'
 import type { CommonLogFilters } from '../types'
 import { CommonLogsStats } from './common-logs-stats'
 import { CompactDateTimeRangePicker } from './compact-date-time-range-picker'
@@ -128,6 +126,7 @@ export function CommonLogsFilterBar<TData>(
   const { isAdminView: isAdmin } = useLogsViewScope()
   const { sensitiveVisible, setSensitiveVisible } = useUsageLogsContext()
   const fetchingLogs = useIsFetching({ queryKey: ['logs'] })
+  const [exporting, setExporting] = useState(false)
   const { data: adminGroups } = useQuery({
     queryKey: ['groups'],
     queryFn: async () => requireServerSuccess(await getGroups()),
@@ -256,7 +255,8 @@ export function CommonLogsFilterBar<TData>(
     queryClient.invalidateQueries({ queryKey: ['usage-logs-stats'] })
   }, [navigate, queryClient])
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = useCallback(async () => {
+    if (exporting) return
     const exportSearchParams = {
       ...buildSearchParams(filters, 'common'),
       type: [logType],
@@ -279,8 +279,21 @@ export function CommonLogsFilterBar<TData>(
       params.set(mappedKey, exportValue)
     })
     const endpoint = isAdmin ? '/api/log/export' : '/api/log/self/export'
-    window.location.assign(`${endpoint}?${params.toString()}`)
-  }, [filters, isAdmin, logType])
+    setExporting(true)
+    try {
+      const response = await api.get(`${endpoint}?${params.toString()}`, {
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'usage-logs.csv'
+      link.click()
+      URL.revokeObjectURL(url)
+    } finally {
+      setExporting(false)
+    }
+  }, [exporting, filters, isAdmin, logType])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -334,12 +347,17 @@ export function CommonLogsFilterBar<TData>(
               variant='outline'
               size='sm'
               onClick={handleExportCsv}
+              disabled={exporting}
               aria-label={t('Export CSV')}
               className='gap-1.5'
             />
           }
         >
-          <Download className='size-4' />
+          {exporting ? (
+            <Loader2 className='size-4 animate-spin' />
+          ) : (
+            <Download className='size-4' />
+          )}
           <span>{t('Export CSV')}</span>
         </TooltipTrigger>
         <TooltipContent>{t('Export CSV')}</TooltipContent>
