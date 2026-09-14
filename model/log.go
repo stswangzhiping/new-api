@@ -559,6 +559,75 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	return logs, total, err
 }
 
+// StreamAllLogs reads matching logs in keyset-paginated batches. It avoids the
+// repeated COUNT and increasingly expensive OFFSET queries used by the UI list.
+func StreamAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string, requestId string, upstreamRequestId string, handle func(*Log) error) error {
+	var tx *gorm.DB
+	if logType == LogTypeUnknown {
+		tx = LOG_DB
+	} else {
+		tx = LOG_DB.Where("logs.type = ?", logType)
+	}
+
+	var err error
+	if tx, err = applyExplicitLogTextFilter(tx, "logs.model_name", modelName); err != nil {
+		return err
+	}
+	if tx, err = applyExplicitLogTextFilter(tx, "logs.username", username); err != nil {
+		return err
+	}
+	if tokenName != "" {
+		tx = tx.Where("logs.token_name = ?", tokenName)
+	}
+	if requestId != "" {
+		tx = tx.Where("logs.request_id = ?", requestId)
+	}
+	if upstreamRequestId != "" {
+		tx = tx.Where("logs.upstream_request_id = ?", upstreamRequestId)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("logs.created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("logs.created_at <= ?", endTimestamp)
+	}
+	if channel != 0 {
+		tx = tx.Where("logs.channel_id = ?", channel)
+	}
+	if group != "" {
+		tx = tx.Where("logs."+logGroupCol+" = ?", group)
+	}
+
+	const batchSize = 1000
+	var lastCreatedAt int64
+	var lastID int
+	hasCursor := false
+	for {
+		pageQuery := tx
+		if hasCursor {
+			pageQuery = pageQuery.Where("(logs.created_at < ?) OR (logs.created_at = ? AND logs.id < ?)", lastCreatedAt, lastCreatedAt, lastID)
+		}
+
+		var logs []*Log
+		if err = pageQuery.Order("logs.created_at desc, logs.id desc").Limit(batchSize).Find(&logs).Error; err != nil {
+			return err
+		}
+		if len(logs) == 0 {
+			return nil
+		}
+		for _, log := range logs {
+			if err = handle(log); err != nil {
+				return err
+			}
+		}
+
+		last := logs[len(logs)-1]
+		lastCreatedAt = last.CreatedAt
+		lastID = last.Id
+		hasCursor = true
+	}
+}
+
 const logSearchCountLimit = 10000
 
 func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string, upstreamRequestId string) (logs []*Log, total int64, err error) {
