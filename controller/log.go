@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -48,12 +47,20 @@ type csvLogOther struct {
 	CacheCreationTokens    int64   `json:"cache_creation_tokens"`
 	CacheCreationTokens5m  int64   `json:"cache_creation_tokens_5m"`
 	CacheCreationTokens1h  int64   `json:"cache_creation_tokens_1h"`
+	MatchedTier            string  `json:"matched_tier"`
+	WebSearchCallCount     int64   `json:"web_search_call_count"`
+	ToolSurcharges         []csvToolSurcharge `json:"tool_surcharges"`
 }
 
-func getCSVLogUsage(other string) (firstTokenSeconds string, cacheRead int64, cacheWrite int64) {
+type csvToolSurcharge struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+func getCSVLogUsage(other string) (firstTokenSeconds string, cacheRead int64, cacheWrite int64, longContext int, webSearchCallCount int64) {
 	var data csvLogOther
-	if err := json.Unmarshal([]byte(other), &data); err != nil {
-		return "", 0, 0
+	if err := common.UnmarshalJsonStr(other, &data); err != nil {
+		return "", 0, 0, 0, 0
 	}
 	if data.Frt > 0 {
 		firstTokenSeconds = fmt.Sprintf("%.3f", data.Frt/1000)
@@ -62,7 +69,21 @@ func getCSVLogUsage(other string) (firstTokenSeconds string, cacheRead int64, ca
 	if cacheWrite == 0 {
 		cacheWrite = data.CacheCreationTokens
 	}
-	return firstTokenSeconds, data.CacheTokens, cacheWrite
+	if data.MatchedTier == "long_context" || data.MatchedTier == "第2档" {
+		longContext = 1
+	}
+	structuredWebSearchCalls := int64(0)
+	for _, surcharge := range data.ToolSurcharges {
+		if surcharge.Name == "web_search" || surcharge.Name == "web_search_preview" {
+			structuredWebSearchCalls += surcharge.Count
+		}
+	}
+	if structuredWebSearchCalls > 0 {
+		webSearchCallCount = structuredWebSearchCalls
+	} else {
+		webSearchCallCount = data.WebSearchCallCount
+	}
+	return firstTokenSeconds, data.CacheTokens, cacheWrite, longContext, webSearchCallCount
 }
 
 // ExportAllLogs streams a CSV directly from the database. Unlike the list API,
@@ -93,14 +114,14 @@ func exportLogs(c *gin.Context, username string) {
 	c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
 
 	writer := csv.NewWriter(c.Writer)
-	if err := writer.Write([]string{"时间", "用户名", "令牌名称", "分组", "类型", "模型名称", "耗时", "首字响应时间", "输入", "缓存读", "缓存写", "输出", "额度", "IP", "详情"}); err != nil {
+	if err := writer.Write([]string{"时间", "用户名", "令牌名称", "分组", "类型", "模型名称", "耗时", "首字响应时间", "输入", "缓存读", "缓存写", "输出", "额度", "IP", "详情", "长上下文", "Web Search 次数"}); err != nil {
 		return
 	}
 
 	shanghai := time.FixedZone("CST", 8*60*60)
 	rows := 0
 	err := model.StreamAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group, requestId, upstreamRequestId, func(log *model.Log) error {
-		firstToken, cacheRead, cacheWrite := getCSVLogUsage(log.Other)
+		firstToken, cacheRead, cacheWrite, longContext, webSearchCallCount := getCSVLogUsage(log.Other)
 		useTime := ""
 		if log.Type == 2 || log.Type == 5 {
 			useTime = strconv.Itoa(log.UseTime)
@@ -121,6 +142,8 @@ func exportLogs(c *gin.Context, username string) {
 			strconv.Itoa(log.Quota),
 			log.Ip,
 			log.Content,
+			strconv.Itoa(longContext),
+			strconv.FormatInt(webSearchCallCount, 10),
 		}); err != nil {
 			return err
 		}
