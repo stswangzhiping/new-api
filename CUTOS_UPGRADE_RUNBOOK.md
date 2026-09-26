@@ -5,7 +5,7 @@ This runbook records the database-safe process for upgrading the CUTOS new-api d
 ## Current baseline
 
 - Application branch: `dev-gateway-rc.40`
-- Baseline commit: `9d1d3d42e`
+- Current development commit: `aaeafc844`
 - Upstream rc.40 base commit: `0aec08fee811ec6136828fda790551b49e410301`
 - Production image at baseline: `new-api:rc40-base-20260925`
 - Production database at baseline: `newapi_rc40_candidate_20260925`
@@ -37,3 +37,21 @@ Application rollback and database rollback are separate operations. If the new v
 ## Required database validation
 
 The project supports SQLite, MySQL, and PostgreSQL. A production PostgreSQL migration rehearsal does not prove general three-database compatibility. Before declaring a schema change complete for upstream-quality use, verify fresh migration, upgrade migration, and a second idempotent startup on all three engines. If resource constraints prevent that validation, record it as an explicit open gap.
+
+## Low-resource functional validation
+
+Use these checks on VM2 without rebuilding the image, running SQLite load tests, or executing the full test suite. Record each result as pass, fail, or skipped.
+
+- Confirm the running container and image tag before testing. Do not restart production solely for these checks.
+- Sign in as an administrator and confirm the user list shows Email and no longer shows Invite Info.
+- With Turnstile disabled, open registration, refresh the image captcha, reject an incorrect answer, and complete one permitted test registration with a correct answer.
+- With Turnstile enabled, confirm registration uses Turnstile and does not request the image captcha.
+- Open usage logs as an administrator, apply time, model, group, and user filters, then download CSV. Confirm the downloaded rows respect those filters.
+- Open personal usage logs as a normal user and download CSV. Confirm the export contains only that user's records.
+- Inspect one CSV containing cache usage and confirm cache read, cache write, long-context, and Web Search fields are present and plausible.
+- Open redemption management and verify existing rc24 fields remain visible and editable.
+- Open top-up history and confirm existing records load without creating new transactions.
+- Open monthly billing and export one PDF. Confirm the totals and generated document render correctly.
+- Watch container CPU, memory, and error logs during the checks. Stop the checks if sustained resource pressure affects production traffic.
+
+Deferred checks: full Go tests, frontend production build, Docker image build, and SQLite/MySQL/PostgreSQL migration matrices. Run these in CI or on a separate adequately sized test host.
