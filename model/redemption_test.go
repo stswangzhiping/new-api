@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strconv"
 	"sync"
 	"testing"
 
@@ -22,11 +23,16 @@ func TestCcBillingAndRedemptionSchemaMigration(t *testing.T) {
 }
 
 func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
-	require.NoError(t, DB.AutoMigrate(&Redemption{}))
+	require.NoError(t, DB.AutoMigrate(&User{}, &Redemption{}))
 	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+	require.NoError(t, DB.Unscoped().Where("username = ?", "redemption-search-user").Delete(&User{}).Error)
 	t.Cleanup(func() {
 		require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)
+		require.NoError(t, DB.Unscoped().Where("username = ?", "redemption-search-user").Delete(&User{}).Error)
 	})
+
+	user := &User{Username: "redemption-search-user", Password: "password", Status: common.UserStatusEnabled}
+	require.NoError(t, DB.Create(user).Error)
 
 	now := common.GetTimestamp()
 	redemptions := []Redemption{
@@ -34,7 +40,7 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 		{Id: 2, Name: "alpha-future", Key: "00000000000000000000000000000002", Status: common.RedemptionCodeStatusEnabled, ExpiredTime: now + 3600},
 		{Id: 3, Name: "alpha-expired", Key: "00000000000000000000000000000003", Status: common.RedemptionCodeStatusEnabled, ExpiredTime: now - 10},
 		{Id: 4, Name: "beta-disabled", Key: "00000000000000000000000000000004", Status: common.RedemptionCodeStatusDisabled, ExpiredTime: 0},
-		{Id: 5, Name: "beta-used", Key: "00000000000000000000000000000005", Status: common.RedemptionCodeStatusUsed, ExpiredTime: 0},
+		{Id: 5, Name: "beta-used", Key: "00000000000000000000000000000005", Status: common.RedemptionCodeStatusUsed, ExpiredTime: 0, UsedUserId: user.Id, CcSource: CcSourcePurchase},
 	}
 	require.NoError(t, DB.Create(&redemptions).Error)
 
@@ -42,6 +48,7 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 		name      string
 		keyword   string
 		status    string
+		ccSource  string
 		startIdx  int
 		num       int
 		wantTotal int64
@@ -59,6 +66,13 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 			num:       10,
 			wantTotal: 3,
 			wantIds:   []int{3, 2, 1},
+		},
+		{
+			name:      "keyword filters by redeemed username",
+			keyword:   "redemption-search",
+			num:       10,
+			wantTotal: 1,
+			wantIds:   []int{5},
 		},
 		{
 			name:      "enabled status excludes expired rows",
@@ -89,6 +103,13 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 			wantIds:   []int{5},
 		},
 		{
+			name:      "source filter",
+			ccSource:  strconv.Itoa(CcSourcePurchase),
+			num:       10,
+			wantTotal: 1,
+			wantIds:   []int{5},
+		},
+		{
 			name:      "pagination keeps unpaged total",
 			startIdx:  1,
 			num:       2,
@@ -99,7 +120,7 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rows, total, err := SearchRedemptions(tt.keyword, tt.status, tt.startIdx, tt.num)
+			rows, total, err := SearchRedemptions(tt.keyword, tt.status, tt.ccSource, tt.startIdx, tt.num)
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantTotal, total)
 			gotIds := make([]int, 0, len(rows))
@@ -109,6 +130,18 @@ func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 			assert.Equal(t, tt.wantIds, gotIds)
 		})
 	}
+
+	rows, total, err := GetAllRedemptions(0, 10, strconv.Itoa(common.RedemptionCodeStatusUsed), strconv.Itoa(CcSourcePurchase))
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, 5, rows[0].Id)
+
+	rows, total, err = GetRedemptionsByUsedUserId(user.Id, 0, 10)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	require.Len(t, rows, 1)
+	assert.Equal(t, 5, rows[0].Id)
 }
 
 func setupRedeemFixture(t *testing.T, quota int) (userId int, key string) {

@@ -17,7 +17,7 @@ import (
 
 func GetAllRedemptions(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	redemptions, total, err := model.GetAllRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), c.Query("status"), c.Query("cc_source"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -31,8 +31,9 @@ func GetAllRedemptions(c *gin.Context) {
 func SearchRedemptions(c *gin.Context) {
 	keyword := c.Query("keyword")
 	status := c.Query("status")
+	ccSource := c.Query("cc_source")
 	pageInfo := common.GetPageQuery(c)
-	redemptions, total, err := model.SearchRedemptions(keyword, status, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	redemptions, total, err := model.SearchRedemptions(keyword, status, ccSource, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -60,6 +61,18 @@ func GetRedemption(c *gin.Context) {
 		"data":    redemption,
 	})
 	return
+}
+
+func GetSelfRedemptions(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	redemptions, total, err := model.GetRedemptionsByUsedUserId(c.GetInt("id"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(redemptions)
+	common.ApiSuccess(c, pageInfo)
 }
 
 func AddRedemption(c *gin.Context) {
@@ -102,12 +115,16 @@ func AddRedemption(c *gin.Context) {
 	for i := 0; i < redemption.Count; i++ {
 		key := common.GetUUID()
 		cleanRedemption := model.Redemption{
-			UserId:      c.GetInt("id"),
-			Name:        redemption.Name,
-			Key:         key,
-			CreatedTime: common.GetTimestamp(),
-			Quota:       redemption.Quota,
-			ExpiredTime: redemption.ExpiredTime,
+			UserId:       c.GetInt("id"),
+			Name:         redemption.Name,
+			Key:          key,
+			CreatedTime:  common.GetTimestamp(),
+			Quota:        redemption.Quota,
+			ExpiredTime:  redemption.ExpiredTime,
+			CcSource:     redemption.CcSource,
+			CcOrderId:    redemption.CcOrderId,
+			CcRefundable: redemption.CcRefundable,
+			CcRemark:     redemption.CcRemark,
 		}
 		err = cleanRedemption.Insert()
 		if err != nil {
@@ -178,6 +195,10 @@ func UpdateRedemption(c *gin.Context) {
 		cleanRedemption.Name = redemption.Name
 		cleanRedemption.Quota = redemption.Quota
 		cleanRedemption.ExpiredTime = redemption.ExpiredTime
+		cleanRedemption.CcSource = redemption.CcSource
+		cleanRedemption.CcOrderId = redemption.CcOrderId
+		cleanRedemption.CcRefundable = redemption.CcRefundable
+		cleanRedemption.CcRemark = redemption.CcRemark
 	}
 	if statusOnly != "" {
 		cleanRedemption.Status = redemption.Status
