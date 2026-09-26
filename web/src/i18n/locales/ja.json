@@ -6777,6 +6777,13 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Top-up History": "チャージ履歴",
+    "Purchase": "購入",
+    "Gift": "ギフト",
+    "System gift": "システムギフト",
+    "No top-up records found": "チャージ記録が見つかりません",
+    "Your top-up history will appear here.": "チャージ履歴がここに表示されます。",
+    "records": "件"
   }
 }

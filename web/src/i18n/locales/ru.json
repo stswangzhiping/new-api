@@ -6777,6 +6777,13 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Top-up History": "История пополнений",
+    "Purchase": "Покупка",
+    "Gift": "Подарок",
+    "System gift": "Системный подарок",
+    "No top-up records found": "Записи о пополнениях не найдены",
+    "Your top-up history will appear here.": "Здесь появится история ваших пополнений.",
+    "records": "записей"
   }
 }

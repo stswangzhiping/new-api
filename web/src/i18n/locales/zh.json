@@ -6787,6 +6787,13 @@
     "Zhipu": "智谱",
     "Zhipu GLM": "智谱GLM",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Top-up History": "充值记录",
+    "Purchase": "购买",
+    "Gift": "赠送",
+    "System gift": "系统赠送",
+    "No top-up records found": "未找到充值记录",
+    "Your top-up history will appear here.": "您的充值记录将显示在这里。",
+    "records": "条记录"
   }
 }

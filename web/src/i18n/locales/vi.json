@@ -6777,6 +6777,13 @@
     "Zhipu": "Zhipu",
     "Zhipu GLM": "Zhipu GLM",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Top-up History": "Lịch sử nạp tiền",
+    "Purchase": "Mua",
+    "Gift": "Quà tặng",
+    "System gift": "Quà tặng hệ thống",
+    "No top-up records found": "Không tìm thấy lịch sử nạp tiền",
+    "Your top-up history will appear here.": "Lịch sử nạp tiền của bạn sẽ xuất hiện tại đây.",
+    "records": "bản ghi"
   }
 }
