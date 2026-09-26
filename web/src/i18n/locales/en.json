@@ -6794,6 +6794,14 @@
     "System gift": "System gift",
     "No top-up records found": "No top-up records found",
     "Your top-up history will appear here.": "Your top-up history will appear here.",
-    "records": "records"
+    "records": "records",
+    "Opening balance": "Opening balance",
+    "Closing balance": "Closing balance",
+    "Generated at": "Generated at",
+    "Toggle model details": "Toggle model details",
+    "Calls": "Calls",
+    "PDF downloaded": "PDF downloaded",
+    "Failed to download PDF": "Failed to download PDF",
+    "Username or user ID": "Username or user ID"
   }
 }

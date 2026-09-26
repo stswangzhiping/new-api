@@ -6784,6 +6784,14 @@
     "System gift": "Quà tặng hệ thống",
     "No top-up records found": "Không tìm thấy lịch sử nạp tiền",
     "Your top-up history will appear here.": "Lịch sử nạp tiền của bạn sẽ xuất hiện tại đây.",
-    "records": "bản ghi"
+    "records": "bản ghi",
+    "Opening balance": "Số dư đầu kỳ",
+    "Closing balance": "Số dư cuối kỳ",
+    "Generated at": "Thời gian tạo",
+    "Toggle model details": "Hiện hoặc ẩn chi tiết mô hình",
+    "Calls": "Lượt gọi",
+    "PDF downloaded": "Đã tải PDF",
+    "Failed to download PDF": "Không thể tải PDF",
+    "Username or user ID": "Tên người dùng hoặc ID người dùng"
   }
 }

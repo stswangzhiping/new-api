@@ -311,6 +311,11 @@ func SetApiRouter(router *gin.Engine) {
 				redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
 			}
 		}
+		billingRoute := apiRouter.Group("/billing")
+		{
+			billingRoute.GET("/self", middleware.UserAuth(), controller.GetUserBilling)
+			billingRoute.GET("/", middleware.AdminAuth(), controller.GetAdminBilling)
+		}
 		apiRouter.GET("/audit", middleware.DisableCache(), middleware.AdminAuth(), middleware.RequirePermission(authz.AuditRead), controller.GetAuditLogs)
 		apiRouter.GET("/audit/self", middleware.DisableCache(), middleware.UserAuth(), controller.GetAuditLogs)
 		logRoute := apiRouter.Group("/log")

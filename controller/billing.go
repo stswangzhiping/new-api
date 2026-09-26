@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/relaykit/types"
@@ -105,4 +108,75 @@ func GetUsage(c *gin.Context) {
 	}
 	c.JSON(200, usage)
 	return
+}
+
+func GetUserBilling(c *gin.Context) {
+	userId := c.GetInt("id")
+	if err := ensureBillingHistory(userId, true); err != nil {
+		common.SysLog("billing generate warn: " + err.Error())
+	}
+	billings, err := model.GetCcBillingsByUser(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, billings)
+}
+
+func GetAdminBilling(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	userId := 0
+	if userIdText := c.Query("user_id"); userIdText != "" {
+		if parsedUserId, err := strconv.Atoi(userIdText); err == nil {
+			userId = parsedUserId
+			if generateErr := ensureBillingHistory(userId, true); generateErr != nil {
+				common.SysLog("billing generate warn: " + generateErr.Error())
+			}
+		}
+	}
+
+	billings, total, err := model.GetAllCcBillingsForAdmin(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if userId > 0 && total == 0 {
+		if err = ensureBillingHistory(userId, true); err != nil {
+			common.SysLog("billing force generate warn: " + err.Error())
+		}
+		billings, total, err = model.GetAllCcBillingsForAdmin(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(billings)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func ensureBillingHistory(userId int, force bool) error {
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		return err
+	}
+	location := time.FixedZone("CST", 8*60*60)
+	lastMonth := time.Now().In(location).AddDate(0, -1, 0)
+	start := time.Date(lastMonth.Year(), lastMonth.Month(), 1, 0, 0, 0, 0, location)
+	if user.CreatedAt > 0 {
+		createdAt := time.Unix(user.CreatedAt, 0).In(location)
+		start = time.Date(createdAt.Year(), createdAt.Month(), 1, 0, 0, 0, 0, location)
+	}
+	end := time.Date(lastMonth.Year(), lastMonth.Month(), 1, 0, 0, 0, 0, location)
+	for cursor := start; !cursor.After(end); cursor = cursor.AddDate(0, 1, 0) {
+		if force {
+			err = model.ComputeAndSaveBillingForMonthForce(userId, cursor.Year(), int(cursor.Month()))
+		} else {
+			err = model.ComputeAndSaveBillingForMonth(userId, cursor.Year(), int(cursor.Month()))
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

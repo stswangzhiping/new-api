@@ -6784,6 +6784,14 @@
     "System gift": "Системный подарок",
     "No top-up records found": "Записи о пополнениях не найдены",
     "Your top-up history will appear here.": "Здесь появится история ваших пополнений.",
-    "records": "записей"
+    "records": "записей",
+    "Opening balance": "Начальный баланс",
+    "Closing balance": "Конечный баланс",
+    "Generated at": "Дата создания",
+    "Toggle model details": "Показать или скрыть сведения о моделях",
+    "Calls": "Вызовы",
+    "PDF downloaded": "PDF загружен",
+    "Failed to download PDF": "Не удалось загрузить PDF",
+    "Username or user ID": "Имя пользователя или ID пользователя"
   }
 }

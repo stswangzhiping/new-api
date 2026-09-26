@@ -123,6 +123,11 @@ export function useSidebarData(): SidebarData {
             icon: ReceiptText,
           },
           {
+            title: t('Billing'),
+            url: '/billing',
+            icon: FileText,
+          },
+          {
             title: t('Profile'),
             url: '/profile',
             icon: User,

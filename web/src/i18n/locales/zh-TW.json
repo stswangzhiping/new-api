@@ -6784,6 +6784,14 @@
     "System gift": "系統贈送",
     "No top-up records found": "找不到儲值記錄",
     "Your top-up history will appear here.": "您的儲值記錄將顯示在這裡。",
-    "records": "筆記錄"
+    "records": "筆記錄",
+    "Opening balance": "期初餘額",
+    "Closing balance": "期末餘額",
+    "Generated at": "產生時間",
+    "Toggle model details": "展開或收合模型明細",
+    "Calls": "呼叫次數",
+    "PDF downloaded": "PDF 已下載",
+    "Failed to download PDF": "PDF 下載失敗",
+    "Username or user ID": "使用者名稱或使用者 ID"
   }
 }

@@ -6784,6 +6784,14 @@
     "System gift": "システムギフト",
     "No top-up records found": "チャージ記録が見つかりません",
     "Your top-up history will appear here.": "チャージ履歴がここに表示されます。",
-    "records": "件"
+    "records": "件",
+    "Opening balance": "期首残高",
+    "Closing balance": "期末残高",
+    "Generated at": "生成日時",
+    "Toggle model details": "モデル詳細を開閉",
+    "Calls": "呼び出し回数",
+    "PDF downloaded": "PDFをダウンロードしました",
+    "Failed to download PDF": "PDFのダウンロードに失敗しました",
+    "Username or user ID": "ユーザー名またはユーザー ID"
   }
 }

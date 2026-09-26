@@ -6784,6 +6784,14 @@
     "System gift": "Cadeau système",
     "No top-up records found": "Aucun rechargement trouvé",
     "Your top-up history will appear here.": "Votre historique de rechargement apparaîtra ici.",
-    "records": "enregistrements"
+    "records": "enregistrements",
+    "Opening balance": "Solde initial",
+    "Closing balance": "Solde final",
+    "Generated at": "Généré le",
+    "Toggle model details": "Afficher ou masquer les détails du modèle",
+    "Calls": "Appels",
+    "PDF downloaded": "PDF téléchargé",
+    "Failed to download PDF": "Échec du téléchargement du PDF",
+    "Username or user ID": "Nom d’utilisateur ou ID utilisateur"
   }
 }

@@ -6794,6 +6794,14 @@
     "System gift": "系统赠送",
     "No top-up records found": "未找到充值记录",
     "Your top-up history will appear here.": "您的充值记录将显示在这里。",
-    "records": "条记录"
+    "records": "条记录",
+    "Opening balance": "期初余额",
+    "Closing balance": "期末余额",
+    "Generated at": "生成时间",
+    "Toggle model details": "展开或收起模型明细",
+    "Calls": "调用次数",
+    "PDF downloaded": "PDF 已下载",
+    "Failed to download PDF": "PDF 下载失败",
+    "Username or user ID": "用户名或用户 ID"
   }
 }
