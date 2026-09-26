@@ -10,6 +10,17 @@ import (
 	"gorm.io/gorm"
 )
 
+func TestCcBillingAndRedemptionSchemaMigration(t *testing.T) {
+	require.NoError(t, DB.AutoMigrate(&Redemption{}, &CcBilling{}))
+
+	migrator := DB.Migrator()
+	require.True(t, migrator.HasTable(&CcBilling{}))
+	require.True(t, migrator.HasIndex(&CcBilling{}, "uq_cc_billing_user_month"))
+	for _, column := range []string{"cc_source", "cc_order_id", "cc_refundable", "cc_remark"} {
+		assert.True(t, migrator.HasColumn(&Redemption{}, column), "missing redemption column %s", column)
+	}
+}
+
 func TestSearchRedemptionsFiltersAndPaginates(t *testing.T) {
 	require.NoError(t, DB.AutoMigrate(&Redemption{}))
 	require.NoError(t, DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Unscoped().Delete(&Redemption{}).Error)

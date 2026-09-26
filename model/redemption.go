@@ -11,6 +11,13 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	CcSourceUnknown = iota
+	CcSourceActivity
+	CcSourcePurchase
+	CcSourceAdjustment
+)
+
 type Redemption struct {
 	Id           int            `json:"id"`
 	UserId       int            `json:"user_id"`
@@ -22,6 +29,10 @@ type Redemption struct {
 	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
 	Count        int            `json:"count" gorm:"-:all"` // only for api request
 	UsedUserId   int            `json:"used_user_id"`
+	CcSource     int            `json:"cc_source" gorm:"column:cc_source;default:0"`
+	CcOrderId    string         `json:"cc_order_id" gorm:"column:cc_order_id;default:''"`
+	CcRefundable bool           `json:"cc_refundable" gorm:"column:cc_refundable;default:false"`
+	CcRemark     string         `json:"cc_remark" gorm:"column:cc_remark;default:''"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
 	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
 }
