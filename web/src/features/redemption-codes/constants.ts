@@ -70,6 +70,56 @@ export const REDEMPTION_FILTER_VALUES = [
   REDEMPTION_FILTER_EXPIRED,
 ] as const
 
+export const REDEMPTION_SOURCE = {
+  UNKNOWN: 0,
+  ACTIVITY: 1,
+  PURCHASE: 2,
+  ADJUSTMENT: 3,
+} as const
+
+export const REDEMPTION_SOURCES: Record<
+  number,
+  Pick<StatusBadgeProps, 'variant'> & {
+    labelKey: string
+    value: number
+  }
+> = {
+  [REDEMPTION_SOURCE.UNKNOWN]: {
+    labelKey: 'Unknown',
+    variant: 'neutral',
+    value: REDEMPTION_SOURCE.UNKNOWN,
+  },
+  [REDEMPTION_SOURCE.ACTIVITY]: {
+    labelKey: 'Activity Gift',
+    variant: 'warning',
+    value: REDEMPTION_SOURCE.ACTIVITY,
+  },
+  [REDEMPTION_SOURCE.PURCHASE]: {
+    labelKey: 'User Purchase',
+    variant: 'info',
+    value: REDEMPTION_SOURCE.PURCHASE,
+  },
+  [REDEMPTION_SOURCE.ADJUSTMENT]: {
+    labelKey: 'Adjustment',
+    variant: 'neutral',
+    value: REDEMPTION_SOURCE.ADJUSTMENT,
+  },
+} as const
+
+export const REDEMPTION_SOURCE_FILTER_VALUES = [
+  String(REDEMPTION_SOURCE.UNKNOWN),
+  String(REDEMPTION_SOURCE.ACTIVITY),
+  String(REDEMPTION_SOURCE.PURCHASE),
+  String(REDEMPTION_SOURCE.ADJUSTMENT),
+] as const
+
+export function getRedemptionSourceOptions(t: TFunction) {
+  return Object.values(REDEMPTION_SOURCES).map((config) => ({
+    label: t(config.labelKey),
+    value: String(config.value),
+  }))
+}
+
 export function getRedemptionStatusOptions(t: TFunction) {
   return [
     ...Object.values(REDEMPTION_STATUSES).map((config) => ({

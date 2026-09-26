@@ -25,6 +25,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, describe, expect, test } from 'vitest'
 
+import { REDEMPTION_SOURCE } from '../../constants'
 import type { Redemption } from '../../types'
 
 const i18n = (await import('i18next')).default
@@ -141,8 +142,10 @@ function getSaveButton(): HTMLButtonElement {
 }
 
 function getControlByLabel(labelText: 'Name'): HTMLInputElement
+function getControlByLabel(labelText: 'Order ID'): HTMLInputElement
 function getControlByLabel(labelText: 'Quota (CNY)'): HTMLInputElement
 function getControlByLabel(labelText: 'Quota (USD)'): HTMLInputElement
+function getControlByLabel(labelText: 'Remark'): HTMLTextAreaElement
 function getControlByLabel(labelText: string): HTMLElement {
   const label = [...document.querySelectorAll<HTMLLabelElement>('label')].find(
     (candidate) => candidate.textContent?.trim() === labelText
@@ -278,6 +281,39 @@ describe('redemption drawer', () => {
     await waitFor(() => expect(updates).toHaveLength(1))
 
     expect(updates[0]?.quota).toBe(1000000)
+  })
+
+  test('loads and submits CUTOS redemption metadata', async () => {
+    const original: Redemption = {
+      ...redemption(3),
+      cc_source: REDEMPTION_SOURCE.PURCHASE,
+      cc_order_id: 'order-123',
+      cc_refundable: true,
+      cc_remark: 'customer purchase',
+    }
+    const updates: Array<Record<string, unknown>> = []
+    apiClient.get = async () => ({ data: { success: true, data: original } })
+    apiClient.put = async (_url, data) => {
+      expect(data && typeof data === 'object').toBeTruthy()
+      updates.push(data as Record<string, unknown>)
+      return { data: { success: true, data: original } }
+    }
+
+    await renderDrawer(original)
+    await waitForLoadedForm()
+
+    expect(getControlByLabel('Order ID').value).toBe('order-123')
+    expect(getControlByLabel('Remark').value).toBe('customer purchase')
+    expect(screen.getByRole('checkbox', { name: 'Refundable' })).toBeChecked()
+
+    submitForm()
+    await waitFor(() => expect(updates).toHaveLength(1))
+    expect(updates[0]).toMatchObject({
+      cc_source: REDEMPTION_SOURCE.PURCHASE,
+      cc_order_id: 'order-123',
+      cc_refundable: true,
+      cc_remark: 'customer purchase',
+    })
   })
 
   test('ignores an older response after switching records', async () => {
