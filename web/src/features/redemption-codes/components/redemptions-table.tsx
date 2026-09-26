@@ -31,7 +31,11 @@ import { useMediaQuery } from '@/hooks'
 import { useTableUrlState } from '@/hooks/use-table-url-state'
 import { createServerError } from '@/lib/server-error-message'
 
-import { getRedemptions, searchRedemptions } from '../api'
+import {
+  getRedemptions,
+  getRedemptionUsers,
+  searchRedemptions,
+} from '../api'
 import {
   ERROR_MESSAGES,
   REDEMPTION_STATUS,
@@ -56,9 +60,19 @@ function isDisabledRedemptionRow(redemption: Redemption) {
 
 export function RedemptionsTable() {
   const { t } = useTranslation()
-  const columns = useRedemptionsColumns()
   const { refreshTrigger } = useRedemptions()
   const isMobile = useMediaQuery('(max-width: 640px)')
+
+  const usersQuery = useQuery({
+    queryKey: ['redemption-users'],
+    queryFn: () => getRedemptionUsers(),
+  })
+  const userMap = useMemo(() => {
+    const userItems = usersQuery.data?.data
+    const users = Array.isArray(userItems) ? userItems : userItems?.items || []
+    return new Map(users.map((user) => [user.id, user]))
+  }, [usersQuery.data?.data])
+  const columns = useRedemptionsColumns(userMap)
 
   const {
     globalFilter,

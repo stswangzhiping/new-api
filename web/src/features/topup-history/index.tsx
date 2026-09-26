@@ -50,11 +50,13 @@ import { toIntlLocale } from '@/i18n/languages'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 import { ROLE } from '@/lib/roles'
 import { createServerError } from '@/lib/server-error-message'
+import { resolveUsername } from '@/lib/user-display'
 import { useAuthStore } from '@/stores/auth-store'
 
 import {
   getAdminRedemptions,
   getAdminTopupGiftLogs,
+  getAdminUsers,
   getSelfRedemptions,
   getSelfTopupGiftLogs,
   getSelfUser,
@@ -175,24 +177,42 @@ export function TopupHistory() {
     },
   })
 
-  const allRecords = data?.records || []
+  const usersQuery = useQuery({
+    queryKey: ['topup-history-users'],
+    queryFn: () => getAdminUsers(1, HISTORY_FETCH_SIZE),
+    enabled: isAdmin,
+  })
+  const users = useMemo(
+    () => readPageItems(usersQuery.data?.data),
+    [usersQuery.data?.data]
+  )
+  const userMap = useMemo(
+    () => new Map(users.map((user) => [user.id, user])),
+    [users]
+  )
+
+  const allRecords = useMemo(() => data?.records || [], [data?.records])
   const currentQuota = data?.currentQuota || 0
   const filteredRecords = useMemo(() => {
-    const userIdFilter = filters.userId.trim()
+    const userFilter = filters.userId.trim().toLowerCase()
     const start = filters.startTime ? filters.startTime.getTime() / 1000 : 0
     const end = filters.endTime
       ? filters.endTime.getTime() / 1000
       : Number.POSITIVE_INFINITY
     return allRecords.filter((record) => {
       const matchesUser =
-        !userIdFilter || String(record.used_user_id).includes(userIdFilter)
+        !userFilter ||
+        resolveUsername(userMap, record.used_user_id)
+          .toLowerCase()
+          .includes(userFilter) ||
+        String(record.used_user_id).includes(userFilter)
       return (
         matchesUser &&
         record.redeemed_time >= start &&
         record.redeemed_time <= end
       )
     })
-  }, [allRecords, filters])
+  }, [allRecords, filters, userMap])
   const pageCount = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE))
   const safePage = Math.min(page, pageCount)
   const records = filteredRecords.slice(
@@ -303,13 +323,12 @@ export function TopupHistory() {
             {isAdmin && (
               <div className='grid gap-1'>
                 <span className='text-muted-foreground text-xs'>
-                  {t('User ID')}
+                  {t('Username or user ID')}
                 </span>
                 <Input
                   className='w-56'
                   value={userId}
-                  inputMode='numeric'
-                  placeholder={t('User ID')}
+                  placeholder={t('Username or user ID')}
                   onChange={(event) => setUserId(event.target.value)}
                   onKeyDown={(event) => event.key === 'Enter' && applyFilters()}
                 />
@@ -327,11 +346,12 @@ export function TopupHistory() {
 
           <Card className='min-h-0 flex-1 overflow-hidden'>
             <CardContent className='flex h-full min-h-0 flex-col p-0'>
-              {isLoading ? (
+              {isLoading && (
                 <div className='text-muted-foreground flex h-48 items-center justify-center text-sm'>
                   {t('Loading...')}
                 </div>
-              ) : filteredRecords.length === 0 ? (
+              )}
+              {!isLoading && filteredRecords.length === 0 && (
                 <Empty className='h-64 border-none'>
                   <EmptyHeader>
                     <EmptyMedia variant='icon'>
@@ -343,14 +363,15 @@ export function TopupHistory() {
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
-              ) : (
+              )}
+              {!isLoading && filteredRecords.length > 0 && (
                 <>
                   <div className='min-h-0 flex-1 overflow-auto'>
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>{t('Time')}</TableHead>
-                          {isAdmin && <TableHead>{t('User ID')}</TableHead>}
+                          {isAdmin && <TableHead>{t('Username')}</TableHead>}
                           <TableHead>{t('Redemption Code')}</TableHead>
                           <TableHead>{t('Name')}</TableHead>
                           <TableHead className='text-right'>
@@ -367,7 +388,9 @@ export function TopupHistory() {
                               {formatTimestamp(record.redeemed_time, locale)}
                             </TableCell>
                             {isAdmin && (
-                              <TableCell>{record.used_user_id}</TableCell>
+                              <TableCell>
+                                {resolveUsername(userMap, record.used_user_id)}
+                              </TableCell>
                             )}
                             <TableCell className='max-w-[260px] truncate font-mono text-xs'>
                               {record.redemption_key || '-'}

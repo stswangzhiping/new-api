@@ -29,6 +29,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatQuota, formatTimestampToDate } from '@/lib/format'
+import { resolveUsername } from '@/lib/user-display'
 
 import {
   REDEMPTION_FILTER_EXPIRED,
@@ -36,10 +37,12 @@ import {
   REDEMPTION_STATUSES,
 } from '../constants'
 import { isRedemptionExpired, isTimestampExpired } from '../lib'
-import type { Redemption } from '../types'
+import type { Redemption, RedemptionUser } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 
-export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
+export function useRedemptionsColumns(
+  users: ReadonlyMap<number, RedemptionUser>
+): ColumnDef<Redemption>[] {
   const { t } = useTranslation()
   return [
     {
@@ -260,7 +263,7 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
         }
         return (
           <StatusBadge
-            label={t('User {{id}}', { id: userId })}
+            label={resolveUsername(users, userId)}
             variant='neutral'
             copyable={false}
             className='-ml-1.5'
@@ -286,13 +289,13 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
             <TooltipTrigger
               render={
                 <StatusBadge
-                  label={t('User {{id}}', { id: userId })}
+                  label={resolveUsername(users, userId)}
                   variant='neutral'
                   copyable={false}
                   className='cursor-help'
                 />
               }
-            ></TooltipTrigger>
+            />
             <TooltipContent>
               <div className='space-y-1 text-xs'>
                 <div>

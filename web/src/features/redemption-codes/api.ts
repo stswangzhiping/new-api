@@ -25,7 +25,19 @@ import type {
   GetRedemptionsResponse,
   SearchRedemptionsParams,
   RedemptionFormData,
+  RedemptionUser,
+  UserPageInfo,
 } from './types'
+
+export async function getRedemptionUsers(
+  pageSize = 500
+): Promise<ApiResponse<UserPageInfo | RedemptionUser[]>> {
+  const params = new URLSearchParams({ p: '1', page_size: String(pageSize) })
+  const res = await api.get<ApiResponse<UserPageInfo | RedemptionUser[]>>(
+    `/api/user/?${params.toString()}`
+  )
+  return res.data
+}
 
 // ============================================================================
 // Redemption Code Management

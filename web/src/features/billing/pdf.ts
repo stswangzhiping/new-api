@@ -35,15 +35,15 @@ const SOURCE_LABEL: Record<number, string> = {
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
 }
 
 function sanitizeFileNamePart(value: string): string {
-  return value.replace(/[<>:"/\\|?*]+/g, '_').trim() || 'user'
+  return value.replaceAll(/[<>:"/\\|?*]+/g, '_').trim() || 'user'
 }
 
 export function formatBillingAmount(quota = 0): string {
@@ -123,8 +123,9 @@ function buildBillingHtml(
   </div>`
 }
 
-const PDF_STYLES = `<style>
+const PDF_STYLES = `
   * { box-sizing: border-box; }
+  html, body { margin: 0; background: #ffffff; }
   .billing-document { width: 794px; padding: 48px 56px; color: #303133; background: #fff; font: 13px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif; }
   header { display: flex; justify-content: space-between; border-bottom: 2px solid #6366f1; padding-bottom: 20px; margin-bottom: 24px; }
   h1 { margin: 0; font-size: 24px; color: #1a1a2e; }
@@ -149,48 +150,45 @@ const PDF_STYLES = `<style>
   .primary { color: #6366f1; }
   .empty { padding: 20px; color: #909399; text-align: center; }
   footer { margin-top: 30px; border-top: 1px solid #ebeef5; padding-top: 10px; color: #c0c4cc; text-align: center; }
-</style>`
-
-const PDF_CANVAS_SAFE_STYLES = `<style>
-  .billing-document, .billing-document * { color: #303133 !important; border-color: #ebeef5 !important; outline-color: transparent !important; text-decoration-color: currentColor !important; box-shadow: none !important; }
-  .billing-document { background: #ffffff !important; }
-  .billing-document header { border-bottom-color: #6366f1 !important; }
-  .billing-document h1 { color: #1a1a2e !important; }
-  .billing-document h2 { border-left-color: #6366f1 !important; }
-  .billing-document .period, .billing-document .primary { color: #6366f1 !important; }
-  .billing-document .generated { color: #606266 !important; }
-  .billing-document .user-bar, .billing-document .summary > div, .billing-document th { background: #f5f7fa !important; }
-  .billing-document .user-bar span, .billing-document .summary span, .billing-document .summary small, .billing-document .empty { color: #909399 !important; }
-  .billing-document .income { color: #16a34a !important; }
-  .billing-document .expense { color: #dc2626 !important; }
-  .billing-document footer { color: #c0c4cc !important; border-top-color: #ebeef5 !important; }
-</style>`
+`
 
 export async function downloadBillingPdf(options: {
   record: BillingRecord
   user: BillingUser
   topups: BillingRedemption[]
 }): Promise<void> {
-  const container = document.createElement('div')
-  container.style.position = 'fixed'
-  container.style.left = '-10000px'
-  container.style.top = '0'
-  container.innerHTML = `${PDF_STYLES}${buildBillingHtml(options.record, options.user, options.topups)}`
-  document.body.appendChild(container)
+  const frame = document.createElement('iframe')
+  frame.title = 'Billing PDF renderer'
+  frame.style.position = 'fixed'
+  frame.style.left = '-10000px'
+  frame.style.top = '0'
+  frame.style.width = '794px'
+  frame.style.height = '1123px'
+  frame.style.border = '0'
+  document.body.appendChild(frame)
 
   try {
-    await document.fonts?.ready
-    const element = container.querySelector('.billing-document') as HTMLElement
+    const frameDocument = frame.contentDocument
+    if (!frameDocument) throw new Error('Unable to create billing PDF document')
+
+    const style = frameDocument.createElement('style')
+    style.textContent = PDF_STYLES
+    frameDocument.head.appendChild(style)
+    frameDocument.body.innerHTML = buildBillingHtml(
+      options.record,
+      options.user,
+      options.topups
+    )
+
+    await frameDocument.fonts?.ready
+    const element = frameDocument.querySelector(
+      '.billing-document'
+    ) as HTMLElement
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
       backgroundColor: '#ffffff',
       logging: false,
-      onclone: (clonedDocument) => {
-        const style = clonedDocument.createElement('style')
-        style.textContent = PDF_CANVAS_SAFE_STYLES
-        clonedDocument.head.appendChild(style)
-      },
     })
     const pdf = new jsPDF('p', 'mm', 'a4')
     const pageWidth = 210
@@ -214,6 +212,6 @@ export async function downloadBillingPdf(options: {
       `月度账单-${options.record.year}年${options.record.month}月-${sanitizeFileNamePart(account)}.pdf`
     )
   } finally {
-    container.remove()
+    frame.remove()
   }
 }

@@ -41,6 +41,12 @@ export const redemptionSchema = z.object({
 
 export type Redemption = z.infer<typeof redemptionSchema>
 
+export interface RedemptionUser {
+  id: number
+  username?: string
+  display_name?: string
+}
+
 // ============================================================================
 // API Request/Response Types
 // ============================================================================
@@ -67,6 +73,11 @@ export interface GetRedemptionsResponse {
     page: number
     page_size: number
   }
+}
+
+export interface UserPageInfo {
+  items?: RedemptionUser[]
+  total?: number
 }
 
 export interface SearchRedemptionsParams {
